@@ -44,7 +44,8 @@ enum BusDirectoryService {
             busLogger.error("fetchRouteBlocks(slst: \(partial.slst, privacy: .public)) に失敗: \(String(describing: error), privacy: .public)")
             return nil
         }
-        guard let match = resolve(id: id, ordinal: partial.ordinal, in: blocks) else {
+        let identity = AppSettings.routeIdentity(routeID: id)
+        guard let match = resolve(id: id, ordinal: partial.ordinal, identity: identity, in: blocks) else {
             busLogger.error("id=\(id, privacy: .public) に一致する系統が見つかりません（全\(blocks.count, privacy: .public)件）")
             return nil
         }
@@ -58,7 +59,10 @@ enum BusDirectoryService {
     }
 
     /// 保存済みの識別情報で系統を引き当てる。見つけたブロックには要求された `id` を持たせて返す。
-    private static func resolve(id: String, ordinal: Int, in blocks: [RouteBlock]) -> RouteBlock? {
+    /// 保存値の読み出しは呼び出し側に任せ、ここは入力だけで結果が決まる純粋な判定にしている（テストのため）。
+    static func resolve(
+        id: String, ordinal: Int, identity: AppSettings.RouteIdentity?, in blocks: [RouteBlock]
+    ) -> RouteBlock? {
         func adopt(_ block: RouteBlock) -> RouteBlock {
             RouteBlock(
                 slst: block.slst, ordinal: block.ordinal, platformLabel: block.platformLabel,
@@ -68,7 +72,7 @@ enum BusDirectoryService {
             )
         }
 
-        if let saved = AppSettings.routeIdentity(routeID: id) {
+        if let saved = identity {
             // ① 時刻表リンクの RTMCD（系統コード）＋ pl（のりば番号）。
             //    tobus.jp 内部のコードなので、表示文言が変わっても追随できる。
             //    ただし時刻表リンクを持たない系統では nil になるため万能ではない。

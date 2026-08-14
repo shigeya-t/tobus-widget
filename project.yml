@@ -22,6 +22,9 @@ targets:
       - target: TobusWidgetExtension
         embed: true
         codeSign: true
+    scheme:
+      testTargets:
+        - TobusWidgetTests
     info:
       path: App/Info.plist
       properties:
@@ -91,3 +94,26 @@ targets:
         SWIFT_VERSION: "5.0"
         APP_GROUP_ID: $(DEVELOPMENT_TEAM).com.example.TobusWidget
         SKIP_INSTALL: false
+
+  # ホストアプリを立てない単体テスト。TobusWidget をテストホストにすると、
+  # 常駐アプリが起動して初回取得（tobus.jpへの通信）が走ってしまうため、
+  # Shared のソースを直接取り込む構成にしている。
+  TobusWidgetTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Shared
+      - path: Tests
+        excludes:
+          - Fixtures
+      - path: Tests/Fixtures
+        buildPhase: resources
+    dependencies:
+      - package: SwiftSoup
+        product: SwiftSoup
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.TobusWidget.Tests
+        GENERATE_INFOPLIST_FILE: true
+        SWIFT_VERSION: "5.0"
+        CODE_SIGN_STYLE: Automatic

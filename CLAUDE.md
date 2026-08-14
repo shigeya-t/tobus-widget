@@ -97,6 +97,27 @@ APP=$(find ~/Library/Developer/Xcode/DerivedData -maxdepth 1 -iname "TobusWidget
 cp -R "$APP" /path/to/destination/
 ```
 
+## テスト
+
+```sh
+xcodebuild test -project TobusWidget.xcodeproj -scheme TobusWidget -destination 'platform=macOS' \
+  -allowProvisioningUpdates CODE_SIGN_STYLE=Automatic \
+  CODE_SIGN_IDENTITY="Apple Development" DEVELOPMENT_TEAM=<Team ID>
+```
+
+`TobusWidgetTests` は**ホストアプリを立てない**単体テスト（`Shared` のソースを直接取り込む構成）。
+`TobusWidget` をテストホストにすると常駐アプリが起動して初回取得の通信が走るため、あえてそうしている。
+したがってテストは通信せず、`AppSettings`（UserDefaults）にも触らない。
+
+対象は「壊れても気づきにくい」2箇所に絞ってある。
+
+- `TobusPageParserTests` — 実ページのHTML（`Tests/Fixtures/stop325.html`、勝どき橋南詰）に対する解析。
+  tobus.jp は公式APIではないので、先方のHTML構造が変わったことに気づく手段がここしか無い。
+  フィクスチャを更新するときは `curl 'https://tobus.jp/blsys/navi?VCD=csrst&ECD=NEXT&LCD=&func=fap&method=msn&slst=325'`
+  で取り直し、期待値（系統数・分待の値）も併せて直すこと
+- `RouteResolutionTests` — `BusDirectoryService.resolve` の多段引き当て。
+  tobus.jp 側の並び順が実際に変わらないと再現できない経路なので、ここでしか担保できない
+
 無署名でコンパイルの通過だけ確認したい場合（`/Applications/` へは配置しない）:
 
 ```sh
