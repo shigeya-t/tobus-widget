@@ -1,0 +1,32 @@
+# XcodeGen が project.yml から生成するファイル
+# 編集する場合は project.yml 側を変更すること
+TobusWidget.xcodeproj/
+App/Info.plist
+App/TobusWidget.entitlements
+WidgetExtension/Info.plist
+WidgetExtension/TobusWidgetExtension.entitlements
+
+# Xcode
+build/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+*.xccheckout
+*.moved-aside
+*.hmap
+*.dSYM
+*.dSYM.zip
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# macOS
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+
+# Claude Code のローカル設定（permissions などマシン固有）
+.claude/settings.local.json
