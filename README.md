@@ -6,6 +6,14 @@
 [都バス運行情報サービス（tobus.jp）](https://tobus.jp/blsys/navi) が内部で使っている
 HTML画面を取得し、クライアント側で解析（スクレイピング）して表示します。
 
+<table>
+<tr>
+<td align="center"><img src="assets/widget-01.png" height="200" alt="ウィジェット（小）"><br><sub>ウィジェット（小）</sub></td>
+<td align="center"><img src="assets/widget-02.png" height="200" alt="ウィジェット（中）"><br><sub>ウィジェット（中）</sub></td>
+<td align="center"><img src="assets/app-01.png" height="200" alt="メニューバー"><br><sub>メニューバー</sub></td>
+</tr>
+</table>
+
 ## できること
 
 - 通知センター / デスクトップに置ける WidgetKit ウィジェット（小・中サイズ）
