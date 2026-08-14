@@ -9,6 +9,9 @@ struct BusEntry: TimelineEntry {
     let routeDisplayName: String?
     /// 系統ラベルのみ（例: "都０５－１"）。小サイズ表示で `stopName` が無い場合の短いフォールバックに使う。
     let routeLabel: String?
+    /// 行き先のみ（例: "東京駅丸の内南口 行"）。小サイズでは `routeDisplayName` を丸ごと出すと
+    /// 系統ラベルと合わさって長すぎるため、行き先だけを別の行に出せるよう分けて持つ。
+    let routeDestination: String?
     let stopName: String?
     /// tobus.jpから取得した接近状況。取得できなかった場合はnil。
     let approach: BusApproach?
@@ -36,8 +39,16 @@ struct BusEntry: TimelineEntry {
         Self.firstNonEmpty(stopName, routeDisplayName) ?? "都バス"
     }
 
+    /// 小サイズのヘッダーで、系統ラベルとは別の行に出す行き先。
+    /// バス停名が無いときは `shortHeaderText` が系統の表示名（＝行き先を含む）に化けるため、
+    /// 二重に出さないよう nil にする。
+    var shortDestination: String? {
+        guard Self.firstNonEmpty(stopName) != nil else { return nil }
+        return Self.firstNonEmpty(routeDestination)
+    }
+
     static func placeholder(_ date: Date = Date()) -> BusEntry {
-        BusEntry(date: date, routeID: nil, routeDisplayName: nil, routeLabel: nil, stopName: nil, approach: nil, scheduled: [], isPaused: false)
+        BusEntry(date: date, routeID: nil, routeDisplayName: nil, routeLabel: nil, routeDestination: nil, stopName: nil, approach: nil, scheduled: [], isPaused: false)
     }
 }
 
@@ -99,6 +110,7 @@ struct Provider: AppIntentTimelineProvider {
             routeID: routeID,
             routeDisplayName: routeName,
             routeLabel: Self.firstWord(of: routeName),
+            routeDestination: Self.dropFirstWord(of: routeName),
             stopName: configuration.stop?.name,
             approach: routeID.flatMap { AppSettings.snapshot(routeID: $0) },
             scheduled: routeID.map { Self.upcomingDates(routeID: $0, now: now) } ?? [],
@@ -110,6 +122,16 @@ struct Provider: AppIntentTimelineProvider {
     private static func firstWord(of text: String?) -> String? {
         guard let text else { return nil }
         return text.split(separator: " ").first.map(String.init)
+    }
+
+    /// 同じ表示名から、系統ラベルを除いた残り（＝行き先）を取り出す。
+    /// 系統ラベルしか無い表示名では nil。
+    private static func dropFirstWord(of text: String?) -> String? {
+        guard let text else { return nil }
+        let parts = text.split(separator: " ", maxSplits: 1)
+        guard parts.count == 2 else { return nil }
+        let rest = parts[1].trimmingCharacters(in: .whitespaces)
+        return rest.isEmpty ? nil : rest
     }
 
     /// 保存済みの時刻表（時刻のみ）を、本日これから来る絶対時刻に変換する。本日分が尽きていれば翌日分。
@@ -153,13 +175,20 @@ struct TobusWidgetEntryView: View {
             VStack(alignment: .leading, spacing: 1) {
                 if family == .systemSmall {
                     // 小サイズは横幅が狭く「系統＋行き先」を1行で入れると収まらないため、
-                    // 系統ラベル（短い方）とバス停名を2行に分けて両方表示する。
+                    // 系統ラベル・行き先・バス停名を行に分けて出す。
                     if let routeLabel = entry.shortRouteLabel {
                         Text(routeLabel)
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
+                    }
+                    if let destination = entry.shortDestination {
+                        Text(destination)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
                     }
                     Text(entry.shortHeaderText)
                         .font(.caption.bold())
