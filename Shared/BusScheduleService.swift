@@ -20,8 +20,15 @@ enum BusScheduleService {
 
         let selectHTML = try await BusAPI.destinationSelectHTML(slst: route.slst, pl: pl, rtmcd: rtmcd)
         guard let params = TobusPageParser.parseStoppoleParams(html: selectHTML) else {
-            await cache.store([], for: key)
-            return []
+            // 行き先が1つしかない系統では、tobus.jp は行き先選択を挟まず時刻表そのものを返す
+            // （例: 勝どき橋南詰の業１０）。この場合 `func_stoppole` が無いので、
+            // 2段階目に進まず、いま取得したHTMLをそのまま時刻表として読む。
+            let times = try TobusPageParser.parseTimetable(html: selectHTML)
+            if times.isEmpty {
+                busLogger.error("行き先選択・時刻表のどちらとしても読めません（slst=\(route.slst, privacy: .public), pl=\(pl, privacy: .public), RTMCD=\(rtmcd, privacy: .public)）")
+            }
+            await cache.store(times, for: key)
+            return times
         }
 
         let timetableHTML = try await BusAPI.timetableHTML(

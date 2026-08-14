@@ -1,0 +1,561 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+
+<title>【時刻表／行き先選択】 ｜ 都バス運行情報サービス ｜ 東京都交通局</title>
+<meta name="keywords" content="都営,都バス,都電,荒川線,バスロケ" />
+<meta name="description" content="行き先を指定して時刻表を表示できます" />
+<link rel="Shortcut Icon" type="image/x-icon" href="favicon.ico" />
+<link rel="stylesheet" href="pc/css/set.css" type="text/css" media="all" />
+<link rel="stylesheet" href="pc/css/print.css" type="text/css" media="print" />
+<link rel="stylesheet" href="pc/css/dropdown.css" type="text/css" media="screen, projection"/>
+<link rel="stylesheet" href="pc/css/jquery.cluetip.css" type="text/css" />
+<link rel="stylesheet" href="pc/css/telop.css" type="text/css" media="screen, projection"/>
+
+<style type="text/css">
+<!--
+.pointcur, .tipmenu-head, .tipmenu-sub {
+	cursor: pointer;
+}
+.inputall {
+	ime-mode: active;
+}
+-->
+</style>
+
+<script type="text/javascript" src="pc/common/js/jquery.js" charset="utf-8"></script>
+<script type="text/javascript" src="pc/common/js/jquery.cookie.js" charset="utf-8"></script>
+<script type="text/javascript" src="pc/common/js/fontsizechange.js" charset="utf-8"></script>
+<script type="text/javascript" src="pc/common/js/jquery.dropdownPlain.js" charset="utf-8"></script>
+<script type="text/javascript" src="pc/common/js/jquery.cluetip.js" charset="utf-8"></script>
+<script type="text/javascript" src="pc/common/js/jquery.popupwindow.js" charset="utf-8"></script>
+<script type="text/javascript" src="pc/common/js/jquery.lightbox_me.js" charset="utf-8"></script>
+
+<script type="text/javascript" src="pc/common/js/default_prg.js" charset="utf-8"></script>
+<script type="text/javascript" src="pc/common/js/default_util.js" charset="utf-8"></script>
+
+
+
+
+
+
+
+
+
+<meta name="ROBOTS" content="NOINDEX,NOFOLLOW,NOARCHIVE" />
+
+<script language="JavaScript" type="text/javascript">
+<!--
+$(function(){
+	// ツールチップメニュー(時刻表)
+	$('a.tipmenu-head').cluetip({
+		activation: 'click',
+		arrows: true,
+		closePosition: 'title',
+		closeText: '<b>×<\/b>',
+		cursor: 'pointer',
+		local:true,
+		sticky: true,
+		positionBy: 'fixed',
+		leftOffset: 10,
+		topOffset: 8,
+		width: 120
+	});
+
+	
+	
+	$('.a_araden').attr({
+		href : "https://tobus.jp/tlsys/navi"
+	});
+	
+	$('.a_global').attr({
+		href : "https://tobus.jp/blsys/navi?LCD=e"
+	});
+
+	// トップ 画面へ
+	$('.func_top').click(function(e) {
+		 return linkProc('TOP');
+	});
+	// 系統運行状況 画面へ
+	$('.func_routeserviceinfo').click(function(e) {
+		return linkProc('rsinfo');
+	});
+	// 車両接近情報-五十音選択 画面へ
+	$('.func_approach_syllable').click(function(e) {
+		return linkProc('apsy');
+	});
+	// 車両接近情報-鉄道駅選択 画面へ
+	$('.func_approach_railway').click(function(e) {
+		return linkProc('aprw');
+	});
+	// 車両接近情報-停留所名称検索 画面へ
+	$('.func_approach_searchstop').click(function(e) {
+		return linkProc('apss');
+	});
+	// 都営交通経路検索 画面へ
+	$('.func_searchroute').click(function(e) {
+		return linkProc('srrtm');
+	});
+	// 車両検索-ラッピングバス 画面へ
+	$('.func_search_wrappingbus').click(function(e) {
+		return linkProc('srwrapbus');
+	});
+	
+	// 車両検索-車種検索 画面へ
+	$('.func_search_model').click(function(e) {
+		return linkProc('srmodel');
+	});
+	
+	// 停留所地図検索 画面へ
+	$('.func_searchstop').click(function(e) {
+		return linkProc('srspm');
+	});
+	// 時刻表-改正時刻表 画面へ
+	$('.func_timetable_revised').click(function(e) {
+		return linkProc('ttre');
+
+	});
+	// 時刻表-五十音選択 画面へ
+	$('.func_timetable_syllable').click(function(e) {
+		return linkProc('ttsy');
+	});
+
+	// 時刻表-鉄道駅選択 画面へ
+	$('.func_timetable_railway').click(function(e) {
+		return linkProc('ttrw');
+	});
+	// 時刻表-停留所名称検索 画面へ
+	$('.func_timetable_searchstop').click(function(e) {
+		return linkProc('ttss');
+	});
+	// 時刻表-深夜バス 画面へ
+	$('.func_timetable_nightbus').click(function(e) {
+		return linkProc('ttni');
+	});
+	
+	// 音声読み上げ対応 車両接近情報-五十音選択 画面へ
+	$('.func_tr_approach_syllable').click(function(e) {
+		return linkProc('txtapsy');
+	});
+	// 音声読み上げ対応 車両接近情報-鉄道駅選択 画面へ
+	$('.func_tr_approach_railway').click(function(e) {
+		return linkProc('txtaprw');
+	});
+	// 音声読み上げ対応 時刻表-五十音選択 画面へ
+	$('.func_tr_timetable_syllable').click(function(e) {
+		return linkProc('txtttsy');
+	});
+	// 音声読み上げ対応 時刻表-鉄道駅選択 画面へ
+	$('.func_tr_timetable_railway').click(function(e) {
+		return linkProc('txtttrw');
+	});
+	// 音声読み上げ対応 運行系統案内　系統選択 画面へ
+	$('.func_tr_serviceroute_select').click(function(e) {
+		return linkProc('txtsrsl');
+	});
+	// 音声読み上げ対応 運行系統案内　五十音順選択 画面へ
+	$('.func_tr_serviceroute_syllable').click(function(e) {
+		return linkProc('txtsrsy');
+	});
+	// 音声読み上げ対応 運行系統案内　鉄道駅選択 画面へ
+	$('.func_tr_serviceroute_railway').click(function(e) {
+		return linkProc('txtsrrw');
+	});
+	
+
+	// 都営交通経路検索(MP) 画面へ
+	$('.func_searchroute_mp').click(function(e) {
+/* 2015/03/12 CNC@JINHW Delete Start ---------------------------------------------------------------------*/
+		//alert("臨時対応のため、一部制限があります。");
+/* 2015/03/12 CNC@JINHW Delete End -----------------------------------------------------------------------*/
+		return window.open("navim?LCD=&RTMCD=0&bs=0&pl=0&VCD=ctop&ECD=srrtm");
+	});
+	// 音声読み上げ対応 画面へ
+	$('.func_textreader').attr({
+		href : "navi?LCD=&RTMCD=0&bs=0&pl=0&VCD=SelectDest&ECD=txtrd"
+	});
+	// アンケート 画面へ
+	$('.func_questionnaire').attr({
+		href : "navi?LCD=&RTMCD=0&bs=0&pl=0&VCD=SelectDest&ECD=qtnre"
+	});
+	// 利用方法 画面へ
+	$('.func_usage').attr({
+		href : "navi?LCD=&RTMCD=0&bs=0&pl=0&VCD=SelectDest&ECD=ug"
+	});
+	// 免責事項 画面へ
+	$('.func_notice').attr({
+		href : "navi?LCD=&RTMCD=0&bs=0&pl=0&VCD=SelectDest&ECD=nc"
+	});
+	// お問合せ 画面へ
+	$('.func_inquiry').attr({
+		href : "http://www.kotsu.metro.tokyo.jp/enq/index.html"
+	});
+	// 携帯のInformation 画面へ
+	$('.func_information').attr({
+		href : "https://tobus.jp/blsys/navim" + "?LCD=&VCD=usage&ECD=upinfo"
+	});
+	// その他のリンク 画面へ
+	$('.func_otherlinks').attr({
+		href : "navi?LCD=&RTMCD=0&bs=0&pl=0&VCD=SelectDest&ECD=otherlinks"
+	});
+	// 都営バスの路線図（みんくるガイド） 画面へ
+	$('.func_kotsumetrotokyo_map').attr({
+		href : "http://www.kotsu.metro.tokyo.jp/bus/map/"
+	});
+	// 都営交通の詳しいエリア 画面へ
+	$('.func_kotsumetrotokyo').attr({
+		href : "http://www.kotsu.metro.tokyo.jp"
+	});
+	// サイトマップへ @cii
+	$('.func_sitemap').click(function(e) {
+		return linkProc('smap');
+	});
+	// アクセシビリティへ @cii
+	$('.func_accessibility').attr({
+		 href: "navi?LCD=&RTMCD=0&bs=0&pl=0&VCD=SelectDest&ECD=acpo"
+	});
+	/*
+	// アクセシビリティへ @cii
+	$('.func_accessibility').click(function(e) {
+		var target = 'navi?LCD=&RTMCD=0&bs=0&pl=0&VCD=SelectDest&ECD=acpo';
+		alert(target);
+		location.href=target;
+	});
+	*/
+
+	var popwin_profiles = {
+			// アンケート
+			pop_questionnaire : {
+				height:800,
+				width:820,
+				center:1
+			},
+			// 利用方法
+			pop_usage : {
+				height:800,
+				width:800,
+				center:1
+			},
+			// 免責事項
+			pop_notice : {
+				height:750,
+				width:800,
+				center:1
+			},
+			// お問合せ
+			pop_info : {
+				height:800,
+				width:820,
+				center:1
+			},
+
+			// 運行系統図
+			pop_serviceroutepic : {
+				height:800,
+				width:820,
+				center:1
+			},
+			// 運行ルート地図
+			pop_mapserviceroute : {
+				height:800,
+				width:820,
+				center:1
+			},
+			// 凡例
+			pop_legend : {
+				height:800,
+				width:820,
+				center:1
+			},
+			// 車両運行状況
+			pop_busserviceinfo : {
+				height:800,
+				width:820,
+				center:1
+			},
+			// ラッピングバス情報
+			pop_wrappingbusinfo : {
+				height:800,
+				width:820,
+				center:1
+			},
+			// 前後出発
+			pop_beforeafter : {
+				height:800,
+				width:820,
+				center:1
+			},
+			// 地図地点
+			pop_mappoint : {
+				height:800,
+				width:820,
+				center:1
+			},
+			// 地図経路
+			pop_maproute : {
+				height:800,
+				width:820,
+				center:1
+			},
+			// アクセシビリティ @cii
+			pop_accessibility : {
+				height:750,
+				width:800,
+				center:1
+			}
+	};
+	$(".popupwindow").popupwindow( popwin_profiles );
+});
+
+/**
+ * 遷移処理
+ * @param eventID イベントID
+ * @return false
+ */
+function linkProc(eventCode) {
+	// サブミット処理
+	return linkSubmit("csrst", eventCode);
+}
+
+window.onload = function() {};
+window.onunload = function() {};
+
+//-->
+</script>
+
+
+<script language="JavaScript" type="text/javascript">
+<!--
+
+	/**** [行き先]選択時の処理 ****/
+	function func_stoppole( routetopcode, stopcode, poleno, lrid, tgo )
+	{
+		document.SubmitForm.VCD.value = "cresultttbl";
+		document.SubmitForm.ECD.value = "show";
+	
+		document.SubmitForm.RTMCD.value = routetopcode;
+		document.SubmitForm.slst.value = stopcode;
+		document.SubmitForm.bs.value = stopcode;
+		document.SubmitForm.pl.value = poleno;
+		document.SubmitForm.lrid.value = lrid;
+		document.SubmitForm.tgo.value = tgo;
+		document.SubmitForm.submit();
+	}
+//-->
+</script>
+
+</head>
+
+<body>
+<a id="top"></a>
+
+<div id="wrapper">
+
+<!-- //========== header ========== -->
+
+
+
+
+
+<p class="skip"><a href="#container" title="本文へ移動します">本文へ移動</a></p>
+
+<div id="header">
+<div id="headerInner" class="clearfix">
+
+
+
+
+
+<a href="http://www.kotsu.metro.tokyo.jp" title="東京都交通局" target="_blank"><img src="pc/common/images/header/header_kyokulog.png"  alt="東京都交通局" class="logo_k" /></a>
+<a href="https://tobus.jp/blsys/navi" title="都バス運行情報サービス"><img src="pc/common/images/header/header_logo.gif" width="200" height="41" alt="都バス運行情報サービス" class="logo" /></a>
+
+<div class="headerRight">
+
+
+
+<!-- / fontChange -->
+<div id="fontChange">
+<p class="ds-none">文字サイズ変更</p>
+<ul id="fontSize">
+<li><img src="pc/common/images/header/font_s.gif" alt="フォント小" class="changeBtn" /></li>
+<li><img src="pc/common/images/header/font_m.gif" alt="フォント中" class="changeBtn" /></li>
+<li><img src="pc/common/images/header/font_l.gif" alt="フォント大" class="changeBtn" /></li>
+</ul>
+</div>
+<!-- fontChange / -->
+
+
+
+<!-- / outsideLink -->
+<ul class="outsideLink">
+
+	
+	<li class="link01"><a href="javascript:void(0);" class="a_global">English</a></li>
+
+
+<li class="link04"><a href="javascript:void(0);" class="func_otherlinks popupwindow" rel="pop_otherlinks" >その他</a></li>
+
+<li class="link02"><a href="http://www.kotsu.metro.tokyo.jp/" target="_blank">東京都交通局</a></li>
+<li class="link03"><a href="http://www.metro.tokyo.lg.jp/" target="_blank">東京都公式ホームページ</a></li>
+</ul>
+<!-- outsideLink / -->
+
+
+
+<ul class="assistNavi">
+<li><a href="javascript:void(0);" class="func_sitemap">サイトマップ</a></li>
+<li><a href="javascript:void(0);" class="func_usage popupwindow" rel="pop_usage">ご利用方法</a></li>
+<li><a href="javascript:void(0);" class="func_textreader">音声読み上げ対応</a></li>
+<li><a class="tipmenu-head" rel="#tipmenu_timetable" title="時刻表">時刻表</a></li>
+<!--li><a href="javascript:void(0);" class="func_information" target="_blank">更新情報</a></li-->
+</ul>
+
+</div>
+
+<div id="tipmenu_timetable">
+<ul>
+	<li><a href="javascript:void(0);" title="五十音選択" class="func_timetable_syllable">五十音選択</a></li>
+	<li><a href="javascript:void(0);" title="鉄道駅選択" class="func_timetable_railway">鉄道駅選択</a></li>
+	<li><a href="javascript:void(0);" title="停留所名称検索" class="func_timetable_searchstop">停留所名称検索</a></li>
+	<li><a href="javascript:void(0);" title="深夜バス" class="func_timetable_nightbus">深夜バス</a></li>
+</ul>
+</div>
+
+<noscript style="color: red; font-size: 2.5em; text-align: center; display: block; text-decoration:blink;">ブラウザのJavaScript設定を有効にしてご覧ください。</noscript>
+
+<!-- / globalNavi -->
+<ul class="globalNavi dropdown">
+<li class="navi01 func_top"><a href="javascript:void(0);" title="都バス運行情報サービス">ホーム</a></li>
+<li class="navi02 func_routeserviceinfo"><a href="javascript:void(0);" title="系統運行状況">系統運行状況</a></li>
+<li class="navi03 dropdown"><a class="pointcur" title="車両接近情報">車両接近情報</a>
+<ul class="sub_menu">
+<li><a href="javascript:void(0);" title="五十音選択" class="func_approach_syllable">五十音選択</a></li>
+<li><a href="javascript:void(0);" title="鉄道駅選択" class="func_approach_railway">鉄道駅選択</a></li>
+<li><a href="javascript:void(0);" title="停留所名称検索" class="func_approach_searchstop">停留所名称検索</a></li>
+</ul></li>
+<li class="navi04 dropdown"><a class="pointcur" title="都営交通経路検索">都営交通経路検索</a>
+<ul class="sub_menu">
+<li><a href="javascript:void(0);" title="地図から検索" class="func_searchroute">地図から検索</a></li>
+<li><a href="javascript:void(0);" title="停留所名称から検索" class="func_searchroute_mp">停留所名称から検索</a></li>
+</ul></li>
+<li class="navi05 dropdown" ><a class="pointcur" title="車両検索">車両検索</a>
+<ul class="sub_menu">
+<li><a href="javascript:void(0);" title="ラッピング検索" class="func_search_wrappingbus">ラッピング検索</a></li>
+
+<li><a href="javascript:void(0);" title="車種検索" class="func_search_model">車種検索</a></li>
+
+</ul></li>
+<li class="navi06 func_searchstop"><a href="javascript:void(0);" title="停留所地図検索">停留所地図検索</a></li>
+<li class="navi07"><a href="javascript:void(0);" class="a_araden" title="都電荒川線情報">都電荒川線情報</a></li>
+</ul><!-- globalNavi / -->
+
+</div></div>
+
+<!-- ========== header ==========// -->
+
+<!-- //========== container ========== -->
+<div id="container" class="clearfix">
+
+<div class="titleTimetbl"">
+<h1><img src="pc/images/timetable/title_timetbl.gif" alt="時刻表" width="83" height="23" /><img src="pc/images/timetable/titlesub_timetbl2.gif" alt="停留所名称検索" width="187" height="23" /></h1>
+<p>行き先を指定して時刻表を表示できます。</p>
+</div>
+
+
+<form action="https://tobus.jp/blsys/navi" name="SubmitForm" class="submit_form" method="get">
+	<input type="hidden" name="VCD" value=""/>
+	<input type="hidden" name="ECD" value=""/>
+	<input type="hidden" name="LCD" value="" />
+	<input type="hidden" name="RTMCD" value=""/>
+	<input type="hidden" name="slst" value=""/>
+	<input type="hidden" name="bs" value=""/>
+	<input type="hidden" name="pl" value=""/>
+	<input type="hidden" name="lrid" value=""/>
+	<input type="hidden" name="tgo" value=""/>
+
+
+
+
+	<table border="1" summary="停留所名称結果List" class="appListTbl01">
+	
+	<tr>
+		<th width="28%" scope="col">停留所</th>
+		<th width="16%" scope="col">系統</th>
+		<th width="28%" scope="col">行き先</th>
+		<th width="28%" scope="col">備考</th>
+	</tr>
+
+	<tr>
+		<td>勝どき橋南詰</td>
+		<td>都０５－１</td>
+		<td>
+			<ul>
+
+				<li><a href="javascript:void(0)" onclick="func_stoppole('184', '325', '1', '2', '2'); return false;" >東京駅丸の内南口行</a></li>
+
+			</ul>
+		</td>
+		<td></td>
+	</tr>
+	</table>
+
+
+
+<!-- / 使い方 -->
+<div class="remarkBox clearfix">
+<h2 class="titleRemark"><img src="pc/images/search/ill_use.gif" alt="使い方" /></h2>
+<ul class="listCircle listRemark">
+<li>行き先をクリックすると、時刻表画面が表示されます。</li>
+</ul>
+</div>
+<!-- 使い方 / -->
+
+</form>
+
+</div>
+<!-- ========== container ==========// -->
+
+
+
+
+
+<!-- //========== footer ========== -->
+<div id="footer">
+
+<p class="pagetop clearfix"><a href="#top"><img src="pc/common/images/btn/btn_pagetop.gif" alt="ページTOP" class="roll" /></a></p>
+
+
+
+<ul class="assistNavi">
+<li><a href="javascript:void(0);" class="func_accessibility popupwindow" rel="pop_accessibility">アクセシビリティ方針</a></li>
+<li><a href="javascript:void(0);" class="func_notice popupwindow" rel="pop_notice">免責事項</a></li>
+<li><a href="javascript:void(0);" class="func_inquiry" target="_blank">お問合せ</a></li>
+</ul>
+
+<p class="footerCopy">Copyright&copy; Bureau of Transportation. Tokyo Metropolitan Government. All Rights Reserved.</p>
+
+</div>
+<!-- ========== footer ==========// -->
+
+</div>
+
+</body>
+</html>

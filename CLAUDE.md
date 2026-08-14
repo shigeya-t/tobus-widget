@@ -165,8 +165,22 @@ open "/Applications/TobusWidget.app"
   `JSESSIONID` Cookieの継続は不要と確認済み（2026-08-14時点、`curl`で無Cookie検証済み）
 - サーバー側エッジキャッシュが60秒（`Cache-Control: s-maxage=60`）。アプリ内キャッシュ
   （`TobusPageService`、50秒）もこれに合わせている
-- 定刻（`Shared/BusScheduleService.swift`）は「行き先選択」ページ→「時刻表本体」ページの
-  2段階フェッチが必要。当日のダイヤ区分（平日/土曜/休日）はページ自身の
+- 定刻（`Shared/BusScheduleService.swift`）は原則「行き先選択」ページ→「時刻表本体」ページの
+  2段階フェッチだが、**行き先が1つしかない系統では1段階目で時刻表そのものが返る**。
+  この場合ページに `func_stoppole` が無く `parseStoppoleParams` が nil になるので、
+  2段階目には進まず、取得済みのHTMLをそのまま `parseTimetable` に通すこと。
+  ここで諦めると、**エラーも出ないまま定刻だけが空になる**（勝どき橋南詰の業１０で実際に踏んだ）。
+  見分け方は応答サイズが分かりやすい。
+
+  ```sh
+  # 行き先が複数（行き先選択ページ・約17KB・func_stoppole あり）
+  curl -s 'https://tobus.jp/blsys/navi?LCD=&VCD=SelectDest&ECD=SelectDest&slst=325&pl=1&RTMCD=184' | grep -c func_stoppole
+  # 行き先が1つ（時刻表ページが直接返る・約159KB・func_stoppole なし）
+  curl -s 'https://tobus.jp/blsys/navi?LCD=&VCD=SelectDest&ECD=SelectDest&slst=325&pl=1&RTMCD=40' | grep -c func_stoppole
+  ```
+
+  どちらの経路も `TimetableParsingTests` がフィクスチャで固定している
+- 当日のダイヤ区分（平日/土曜/休日）はページ自身の
   「本日は、〇曜ダイヤで運行しております」というリンクのIDから判定しており、
   こちら側で祝日判定などは行っていない
 
