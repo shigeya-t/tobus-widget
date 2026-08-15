@@ -249,7 +249,7 @@ final class ArrivalModel: ObservableObject {
             if let timetable = try? await BusScheduleService.fetchTimetable(for: route) {
                 AppSettings.saveSchedule(timetable, routeID: route.id)
                 guard isCurrent() else { return }
-                scheduled = Self.upcomingDates(from: timetable.times)
+                scheduled = BusTime.upcoming(from: timetable.times)
                 scheduleKind = timetable.scheduleKind
             }
         }
@@ -284,21 +284,6 @@ final class ArrivalModel: ObservableObject {
                 }
             }
         }
-    }
-
-    /// 時刻表（[[BusTime]]、時刻のみ）を、本日これから来る絶対時刻（[[Date]]）に変換する。
-    /// 本日分が尽きていれば翌日分にフォールバックする。
-    static func upcomingDates(from times: [BusTime], now: Date = Date()) -> [Date] {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TobusConfig.timeZone
-
-        let todayRemaining = times
-            .compactMap { $0.date(on: now, calendar: calendar) }
-            .filter { $0 > now }
-        if !todayRemaining.isEmpty { return todayRemaining }
-
-        guard let tomorrow = calendar.date(byAdding: .day, value: 1, to: now) else { return [] }
-        return times.compactMap { $0.date(on: tomorrow, calendar: calendar) }
     }
 
     /// tobus.jpの検索仕様: 「ひらがな又はカタカナで検索する場合は、２文字以上を入力して下さい」

@@ -68,6 +68,21 @@ struct BusTime: Comparable, Hashable, Codable, Sendable {
         (lhs.hour, lhs.minute) < (rhs.hour, rhs.minute)
     }
 
+    /// 時刻のみの一覧を、本日これから来る絶対時刻へ変換する。本日分が尽きていれば翌日分を返す。
+    /// アプリとウィジェット拡張の双方が同じ並びを出す必要があるため、ここに集約している。
+    static func upcoming(from times: [BusTime], now: Date = Date()) -> [Date] {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TobusConfig.timeZone
+
+        let todayRemaining = times
+            .compactMap { $0.date(on: now, calendar: calendar) }
+            .filter { $0 > now }
+        if !todayRemaining.isEmpty { return todayRemaining }
+
+        guard let tomorrow = calendar.date(byAdding: .day, value: 1, to: now) else { return [] }
+        return times.compactMap { $0.date(on: tomorrow, calendar: calendar) }
+    }
+
     /// 深夜便は24時を超える表記（例: 25時10分）があるため、日をまたぐ場合は繰り上げる。
     func date(on day: Date, calendar: Calendar) -> Date? {
         var components = calendar.dateComponents([.year, .month, .day], from: day)

@@ -140,16 +140,7 @@ struct Provider: AppIntentTimelineProvider {
     /// 保存済みの時刻表（時刻のみ）を、本日これから来る絶対時刻に変換する。本日分が尽きていれば翌日分。
     private static func upcomingDates(routeID: String, now: Date) -> [Date] {
         guard let times = AppSettings.schedule(routeID: routeID) else { return [] }
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TobusConfig.timeZone
-
-        let todayRemaining = times
-            .compactMap { $0.date(on: now, calendar: calendar) }
-            .filter { $0 > now }
-        if !todayRemaining.isEmpty { return todayRemaining }
-
-        guard let tomorrow = calendar.date(byAdding: .day, value: 1, to: now) else { return [] }
-        return times.compactMap { $0.date(on: tomorrow, calendar: calendar) }
+        return BusTime.upcoming(from: times, now: now)
     }
 }
 
