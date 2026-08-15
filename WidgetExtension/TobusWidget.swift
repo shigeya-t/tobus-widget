@@ -17,6 +17,8 @@ struct BusEntry: TimelineEntry {
     let approach: BusApproach?
     /// 本日の残り定刻（無ければ翌日分）。
     let scheduled: [Date]
+    /// `scheduled` がどのダイヤ区分のものか（`平日` / `土曜` / `休日`）。判別できなければ nil。
+    let scheduleKind: String?
     /// 一時停止中は通信せず、最後に取得した値をそのまま表示する
     let isPaused: Bool
 
@@ -48,7 +50,7 @@ struct BusEntry: TimelineEntry {
     }
 
     static func placeholder(_ date: Date = Date()) -> BusEntry {
-        BusEntry(date: date, routeID: nil, routeDisplayName: nil, routeLabel: nil, routeDestination: nil, stopName: nil, approach: nil, scheduled: [], isPaused: false)
+        BusEntry(date: date, routeID: nil, routeDisplayName: nil, routeLabel: nil, routeDestination: nil, stopName: nil, approach: nil, scheduled: [], scheduleKind: nil, isPaused: false)
     }
 }
 
@@ -114,6 +116,7 @@ struct Provider: AppIntentTimelineProvider {
             stopName: configuration.stop?.name,
             approach: routeID.flatMap { AppSettings.snapshot(routeID: $0) },
             scheduled: routeID.map { Self.upcomingDates(routeID: $0, now: now) } ?? [],
+            scheduleKind: routeID.flatMap { AppSettings.scheduleKind(routeID: $0) },
             isPaused: AppSettings.isPaused
         )
     }
@@ -259,9 +262,11 @@ struct TobusWidgetEntryView: View {
     private var scheduleFooter: some View {
         if !entry.scheduled.isEmpty {
             VStack(alignment: .leading, spacing: 1) {
-                Text("定刻")
+                Text(TobusConfig.scheduleHeading(kind: entry.scheduleKind))
                     .font(Self.footnoteFont)
                     .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
                 HStack(spacing: 6) {
                     ForEach(Array(entry.scheduled.prefix(family == .systemSmall ? 2 : 3).enumerated()), id: \.offset) { _, date in
                         Text(date, format: .dateTime.hour().minute())

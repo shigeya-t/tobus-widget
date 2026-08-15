@@ -20,6 +20,16 @@ struct ParsedBlock {
     let timetablePl: Int?
 }
 
+/// 時刻表ページの解析結果。
+struct ParsedTimetable {
+    let times: [BusTime]
+    /// ページ自身が申告している当日のダイヤ区分（`平日` / `土曜` / `休日`）。読み取れなければ nil。
+    /// 表のIDがそのままこの文字列になっており、`times` はこの区分の表から取っている。
+    let scheduleKind: String?
+
+    static let empty = ParsedTimetable(times: [], scheduleKind: nil)
+}
+
 /// 「行き先選択」ページの `onclick="func_stoppole(...)"` から取れる、時刻表ページ本体を
 /// 取得するために必要なパラメータ一式。
 struct StoppoleParams {
@@ -203,12 +213,12 @@ enum TobusPageParser {
     /// 時刻表ページ（`VCD=cresultttbl&ECD=show`）から、本日のダイヤ区分の便一覧を取り出す。
     /// ページ自身が「本日は、〇曜ダイヤで運行しております」という文言と、対応する表のIDを
     /// 教えてくれるため、自前で祝日判定などをする必要がない。
-    static func parseTimetable(html: String) throws -> [BusTime] {
+    static func parseTimetable(html: String) throws -> ParsedTimetable {
         let doc = try SwiftSoup.parse(html)
 
         guard let todayTableId = try todayScheduleTableId(doc: doc),
               let table = try doc.select("table[id=\(todayTableId)]").first()
-        else { return [] }
+        else { return .empty }
 
         var times: [BusTime] = []
         for row in try table.select("tr").array() {
@@ -221,7 +231,7 @@ enum TobusPageParser {
                 times.append(BusTime(hour: hour, minute: minute))
             }
         }
-        return times.sorted()
+        return ParsedTimetable(times: times.sorted(), scheduleKind: todayTableId)
     }
 
     /// 「本日は、<a onclick="document.getElementById('土曜').scrollIntoView();">土曜ダイヤ</a>で運行しております。」

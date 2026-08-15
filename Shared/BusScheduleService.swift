@@ -10,9 +10,9 @@ enum BusScheduleService {
 
     /// 指定した系統の、本日のダイヤ区分における時刻表を取得する。
     /// 時刻表リンクの情報（`timetableRTMCD` / `timetablePl`）を持たない系統では取得できない。
-    static func fetchTimetable(for route: RouteBlock) async throws -> [BusTime] {
+    static func fetchTimetable(for route: RouteBlock) async throws -> ParsedTimetable {
         guard let rtmcd = route.timetableRTMCD, let pl = route.timetablePl else {
-            return []
+            return .empty
         }
 
         let key = "\(route.slst):\(pl):\(rtmcd)"
@@ -23,25 +23,25 @@ enum BusScheduleService {
             // 行き先が1つしかない系統では、tobus.jp は行き先選択を挟まず時刻表そのものを返す
             // （例: 勝どき橋南詰の業１０）。この場合 `func_stoppole` が無いので、
             // 2段階目に進まず、いま取得したHTMLをそのまま時刻表として読む。
-            let times = try TobusPageParser.parseTimetable(html: selectHTML)
-            if times.isEmpty {
+            let parsed = try TobusPageParser.parseTimetable(html: selectHTML)
+            if parsed.times.isEmpty {
                 busLogger.error("行き先選択・時刻表のどちらとしても読めません（slst=\(route.slst, privacy: .public), pl=\(pl, privacy: .public), RTMCD=\(rtmcd, privacy: .public)）")
             }
-            await cache.store(times, for: key)
-            return times
+            await cache.store(parsed, for: key)
+            return parsed
         }
 
         let timetableHTML = try await BusAPI.timetableHTML(
             rtmcd: params.rtmcd, slst: params.slst, pl: params.pl, lrid: params.lrid, tgo: params.tgo
         )
-        let times = try TobusPageParser.parseTimetable(html: timetableHTML)
-        await cache.store(times, for: key)
-        return times
+        let parsed = try TobusPageParser.parseTimetable(html: timetableHTML)
+        await cache.store(parsed, for: key)
+        return parsed
     }
 }
 
 private actor ScheduleCache {
-    private var entries: [String: (times: [BusTime], day: Date)] = [:]
+    private var entries: [String: (timetable: ParsedTimetable, day: Date)] = [:]
 
     private var today: Date {
         var calendar = Calendar(identifier: .gregorian)
@@ -49,12 +49,12 @@ private actor ScheduleCache {
         return calendar.startOfDay(for: Date())
     }
 
-    func value(for key: String) -> [BusTime]? {
+    func value(for key: String) -> ParsedTimetable? {
         guard let entry = entries[key], entry.day == today else { return nil }
-        return entry.times
+        return entry.timetable
     }
 
-    func store(_ times: [BusTime], for key: String) {
-        entries[key] = (times, today)
+    func store(_ timetable: ParsedTimetable, for key: String) {
+        entries[key] = (timetable, today)
     }
 }

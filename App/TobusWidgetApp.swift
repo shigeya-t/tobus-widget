@@ -38,6 +38,7 @@ final class ArrivalModel: ObservableObject {
             selectedRoute = nil
             approach = nil
             scheduled = []
+            scheduleKind = nil
             errorText = nil
             selectionGeneration += 1
             if let stop = selectedStop {
@@ -58,6 +59,8 @@ final class ArrivalModel: ObservableObject {
     @Published var approach: BusApproach?
     /// 本日の残り定刻（時刻順）。
     @Published var scheduled: [Date] = []
+    /// `scheduled` がどのダイヤ区分のものか（`平日` / `土曜` / `休日`）。判別できなければ nil。
+    @Published var scheduleKind: String?
     @Published var errorText: String?
     /// 一時停止中は定期取得を行わない。設定は次回起動にも引き継ぐ。
     @Published private(set) var isPaused: Bool
@@ -243,10 +246,11 @@ final class ArrivalModel: ObservableObject {
 
             // 時刻表は1日1回取得できれば十分なため（BusScheduleService側で日次キャッシュ済み）、
             // 60秒ごとの本処理内で呼んでもコストは小さい。
-            if let times = try? await BusScheduleService.fetchTimetable(for: route) {
-                AppSettings.saveSchedule(times, routeID: route.id)
+            if let timetable = try? await BusScheduleService.fetchTimetable(for: route) {
+                AppSettings.saveSchedule(timetable, routeID: route.id)
                 guard isCurrent() else { return }
-                scheduled = Self.upcomingDates(from: times)
+                scheduled = Self.upcomingDates(from: timetable.times)
+                scheduleKind = timetable.scheduleKind
             }
         }
 
@@ -274,8 +278,8 @@ final class ArrivalModel: ObservableObject {
                     } catch {
                         busLogger.error("\(route.id, privacy: .public) の接近状況取得に失敗: \(String(describing: error), privacy: .public)")
                     }
-                    if let times = try? await BusScheduleService.fetchTimetable(for: route) {
-                        AppSettings.saveSchedule(times, routeID: route.id)
+                    if let timetable = try? await BusScheduleService.fetchTimetable(for: route) {
+                        AppSettings.saveSchedule(timetable, routeID: route.id)
                     }
                 }
             }
@@ -461,7 +465,7 @@ struct MenuContent: View {
     private var scheduleRow: some View {
         if !model.scheduled.isEmpty {
             VStack(alignment: .leading, spacing: 4) {
-                Text("定刻")
+                Text(TobusConfig.scheduleHeading(kind: model.scheduleKind))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 HStack(spacing: 10) {

@@ -44,7 +44,7 @@ final class TimetableParsingTests: XCTestCase {
     /// その同じHTMLは、時刻表としてはそのまま読める。
     /// `BusScheduleService` はこれを頼りにフォールバックしている。
     func testSameHTMLParsesDirectlyAsTimetable() throws {
-        let times = try TobusPageParser.parseTimetable(html: try fixture("timetable_direct_gyo10"))
+        let times = try TobusPageParser.parseTimetable(html: try fixture("timetable_direct_gyo10")).times
         XCTAssertFalse(times.isEmpty, "業１０の定刻が取れていない")
         XCTAssertEqual(times, times.sorted(), "時刻順に並んでいる")
 
@@ -57,10 +57,18 @@ final class TimetableParsingTests: XCTestCase {
     /// フィクスチャは休日ダイヤと申告しているので、平日の表とは異なる結果になるはず。
     func testUsesScheduleTableDeclaredByPage() throws {
         let html = try fixture("timetable_direct_gyo10")
-        let times = try TobusPageParser.parseTimetable(html: html)
+        let parsed = try TobusPageParser.parseTimetable(html: html)
 
         XCTAssertTrue(html.contains("getElementById('休日')"), "フィクスチャは休日ダイヤを申告している")
-        // 休日ダイヤの表を読めていれば、平日にしか無い時間帯まで拾ってしまうことはない。
-        XCTAssertFalse(times.isEmpty)
+        XCTAssertEqual(parsed.scheduleKind, "休日", "ページの申告どおりの区分を返す")
+        XCTAssertFalse(parsed.times.isEmpty)
+    }
+
+    /// 見出しはダイヤ区分が分かるときだけ添える。
+    func testScheduleHeadingIncludesKindWhenKnown() {
+        XCTAssertEqual(TobusConfig.scheduleHeading(kind: "土曜"), "定刻（土曜ダイヤ）")
+        XCTAssertEqual(TobusConfig.scheduleHeading(kind: "休日"), "定刻（休日ダイヤ）")
+        XCTAssertEqual(TobusConfig.scheduleHeading(kind: nil), "定刻")
+        XCTAssertEqual(TobusConfig.scheduleHeading(kind: ""), "定刻", "空文字は「値あり」として扱わない")
     }
 }
