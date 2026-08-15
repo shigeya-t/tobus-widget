@@ -521,8 +521,10 @@ struct MenuContent: View {
         VStack(alignment: .leading, spacing: 2) {
             switch approach.kind {
             case .estimatedMinutes(let m):
+                // 江戸バス版と同じ配色: 到着＝緑。分数が出ているうちは既定色のまま。
                 Text(m <= 0 ? "まもなく到着" : "約\(m)分後")
                     .font(.system(size: 30, weight: .semibold, design: .rounded))
+                    .foregroundStyle(m <= 0 ? Color.green : Color.primary)
             case .departingSoon:
                 Text("５分以内に発車予定")
                     .font(.system(size: 26, weight: .semibold, design: .rounded))

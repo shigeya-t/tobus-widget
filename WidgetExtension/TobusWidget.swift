@@ -324,8 +324,11 @@ struct TobusWidgetEntryView: View {
     private var statusBody: some View {
         switch entry.approach?.kind {
         case .estimatedMinutes(let m):
+            // 「まもなく到着」は今すぐ動く必要がある状態なので、分数表示と色で区別する
+            // （江戸バス版と同じ配色: 到着＝緑）。
             Text(m <= 0 ? "まもなく到着" : "約\(m)分後")
                 .font(.system(size: family == .systemSmall ? 23 : 35, weight: .semibold, design: .rounded))
+                .foregroundStyle(m <= 0 ? Color.green : Color.primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
 
