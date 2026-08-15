@@ -71,10 +71,33 @@ final class TobusPageParserTests: XCTestCase {
         XCTAssertEqual(kind, .noBusApproaching)
     }
 
-    /// 複数台が接近している場合でも、直近の1台の分数を採る。
+    /// 複数台が接近している場合、`estimatedMinutes` は直近の1台。
     func testTakesNearestBusWhenMultipleApproaching() throws {
         let blocks = try parsedPage().blocks
         XCTAssertEqual(blocks[9].estimatedMinutes, 6, "晴海埠頭行は06分待と13分待の2台")
+    }
+
+    /// 2台目以降も捨てずに拾う。表のセルの並びが停留所に近い順なので、そのまま到着順になる。
+    func testCollectsFollowingBuses() throws {
+        let blocks = try parsedPage().blocks
+        XCTAssertEqual(blocks[9].followingMinutes, [13], "06分待の次に13分待")
+        XCTAssertEqual(blocks[2].followingMinutes, [], "1台だけの系統は空")
+        XCTAssertEqual(blocks[5].followingMinutes, [], "接近中のバスがいない系統も空")
+    }
+
+    /// 後続は必ず1台目より後（＝待ち時間が長い）はず。並び順を取り違えていないかの確認。
+    func testFollowingBusesComeAfterTheFirst() throws {
+        for block in try parsedPage().blocks {
+            guard let first = block.estimatedMinutes, !block.followingMinutes.isEmpty else { continue }
+            XCTAssertEqual(
+                block.followingMinutes, block.followingMinutes.sorted(),
+                "\(block.label): 後続が到着順に並んでいない"
+            )
+            XCTAssertGreaterThanOrEqual(
+                block.followingMinutes[0], first,
+                "\(block.label): 1台目より早い後続がある（並び順の解釈ミス）"
+            )
+        }
     }
 
     func testParsesObservedAt() throws {

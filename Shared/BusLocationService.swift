@@ -18,10 +18,11 @@ enum BusLocationService {
             )
         }
         let kind = BusApproachKind(statusText: block.statusText, estimatedMinutes: block.estimatedMinutes)
-        busLogger.debug("fetchApproach \(route.id, privacy: .public): \(String(describing: kind), privacy: .public)（\(block.statusText, privacy: .public)）")
+        busLogger.debug("fetchApproach \(route.id, privacy: .public): \(String(describing: kind), privacy: .public)（\(block.statusText, privacy: .public)）後続=\(block.followingMinutes, privacy: .public)")
         return BusApproach(
             kind: kind,
             statusText: block.statusText,
+            followingMinutes: block.followingMinutes,
             noteText: block.noteText,
             observedAt: page.observedAt
         )

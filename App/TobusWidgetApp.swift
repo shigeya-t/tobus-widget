@@ -549,6 +549,13 @@ struct MenuContent: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            // 同じ系統に2台以上接近しているときは、後続も出す（メニューは幅に余裕があるので全台）。
+            if !approach.followingMinutes.isEmpty {
+                let shown = approach.followingMinutes.map { $0 <= 0 ? "まもなく" : "\($0)分後" }
+                Text("次 \(shown.joined(separator: "、"))")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
             if let note = approach.noteText {
                 Text(note)
                     .font(.caption)

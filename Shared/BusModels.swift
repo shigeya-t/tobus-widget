@@ -125,6 +125,9 @@ struct BusApproach: Equatable {
     let kind: BusApproachKind
     /// tobus.jpが返す生のバケット文言（表示にそのまま使えるようにしておく）
     let statusText: String
+    /// 2台目以降の待ち時間（分、到着が早い順）。1台だけなら空。
+    /// `kind` は1台目だけを表すので、後続はここから読む。
+    var followingMinutes: [Int] = []
     /// 「本日は運休日です。」「本日は土曜ダイヤで運行しています。」など、状態を補足する注記
     let noteText: String?
     /// ページに表示されている「HH:mm 時点の情報」の時刻

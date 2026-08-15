@@ -82,12 +82,15 @@ enum AppSettings {
         }
         let kind: Kind
         let minutes: Int?
+        /// 2台目以降の待ち時間。この項目が無い古い保存データも読めるよう省略可能にしている。
+        let followingMinutes: [Int]?
         let statusText: String
         let noteText: String?
         let observedAt: Date
 
         init(_ approach: BusApproach) {
             statusText = approach.statusText
+            followingMinutes = approach.followingMinutes.isEmpty ? nil : approach.followingMinutes
             noteText = approach.noteText
             observedAt = approach.observedAt
             switch approach.kind {
@@ -112,7 +115,11 @@ enum AppSettings {
             case .suspended: kindValue = .suspended
             case .other: kindValue = .other(statusText)
             }
-            return BusApproach(kind: kindValue, statusText: statusText, noteText: noteText, observedAt: observedAt)
+            return BusApproach(
+                kind: kindValue, statusText: statusText,
+                followingMinutes: followingMinutes ?? [],
+                noteText: noteText, observedAt: observedAt
+            )
         }
     }
 

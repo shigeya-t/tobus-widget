@@ -289,6 +289,7 @@ struct TobusWidgetEntryView: View {
         } else {
             VStack(alignment: .leading, spacing: 2) {
                 statusBody
+                followingBusesLine
                 if let note = entry.approach?.noteText {
                     Text(note)
                         .font(.caption2)
@@ -297,6 +298,26 @@ struct TobusWidgetEntryView: View {
                 }
             }
         }
+    }
+
+    /// 同じ系統に2台以上接近しているときの、2台目以降。
+    /// 1台目を逃したときの判断に使えるよう、主役の数字のすぐ下に小さく添える。
+    @ViewBuilder
+    private var followingBusesLine: some View {
+        let following = entry.approach?.followingMinutes ?? []
+        if !following.isEmpty {
+            // 小サイズは縦幅が厳しいので1台分だけ。中サイズは入るだけ並べる。
+            let shown = family == .systemSmall ? Array(following.prefix(1)) : following
+            Text("次 \(shown.map(Self.minutesText).joined(separator: "、"))")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+    }
+
+    private static func minutesText(_ minutes: Int) -> String {
+        minutes <= 0 ? "まもなく" : "\(minutes)分後"
     }
 
     @ViewBuilder

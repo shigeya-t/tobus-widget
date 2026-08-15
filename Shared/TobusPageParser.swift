@@ -15,6 +15,8 @@ struct ParsedBlock {
     let destination: String
     let statusText: String
     let estimatedMinutes: Int?
+    /// 2台目以降の待ち時間（分、到着が早い順）。1台だけなら空。
+    let followingMinutes: [Int]
     let noteText: String?
     let timetableRTMCD: Int?
     let timetablePl: Int?
@@ -82,7 +84,7 @@ enum TobusPageParser {
                 let destination = try text(firstOf: dl.select("dd.stopName"))
                 guard let table = try dl.nextElementSibling(), table.hasClass("appListTbl") else { continue }
 
-                let (statusText, estimatedMinutes) = try Self.approachInfo(inTable: table)
+                let (statusText, estimatedMinutes, followingMinutes) = try Self.approachInfo(inTable: table)
                 let containerText = try table.parent()?.text() ?? ""
                 let noteText = Self.note(fromContainerText: containerText)
                 let (timetableRTMCD, timetablePl) = Self.timetableLinkParams(dl: dl)
@@ -94,6 +96,7 @@ enum TobusPageParser {
                     destination: destination,
                     statusText: statusText,
                     estimatedMinutes: estimatedMinutes,
+                    followingMinutes: followingMinutes,
                     noteText: noteText,
                     timetableRTMCD: timetableRTMCD,
                     timetablePl: timetablePl
@@ -107,15 +110,27 @@ enum TobusPageParser {
 
     /// 系統ブロックの接近状況本文を取り出す。
     /// 実車が接近中のレイアウトを優先し、無ければ定型メッセージのレイアウトにフォールバックする。
-    private static func approachInfo(inTable table: Element) throws -> (statusText: String, estimatedMinutes: Int?) {
+    ///
+    /// 表は停留所を左方向に並べた帯（`◎当停留所 ←1つ前 ←2つ前 …`）で、`td.busLabel` は
+    /// その位置に対応する。したがってセルの並び＝停留所に近い順＝到着が早い順になる。
+    /// 同じ系統に複数台が接近していることがあるため、先頭だけでなく全台分を返す。
+    private static func approachInfo(
+        inTable table: Element
+    ) throws -> (statusText: String, estimatedMinutes: Int?, followingMinutes: [Int]) {
+        var labels: [String] = []
         for cell in try table.select("td.busLabel").array() {
             let cellText = try cell.text().trimmingCharacters(in: .whitespacesAndNewlines)
             guard !cellText.isEmpty else { continue }
-            return (cellText, Self.minutes(fromBusLabel: cellText))
+            labels.append(cellText)
+        }
+
+        if let first = labels.first {
+            let following = labels.dropFirst().compactMap { Self.minutes(fromBusLabel: $0) }
+            return (first, Self.minutes(fromBusLabel: first), following)
         }
 
         let stopNotesText = try text(firstOf: table.select("td.stopNotes"))
-        return (stopNotesText, nil)
+        return (stopNotesText, nil, [])
     }
 
     /// 「東京駅丸の内南口行04分待」→ 4、「深川車庫前行まもなく」→ 0
