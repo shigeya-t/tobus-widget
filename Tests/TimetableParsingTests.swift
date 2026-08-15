@@ -6,6 +6,13 @@ import XCTest
 /// このときページに `func_stoppole` が無いため、2段階目に進めない。
 /// かつて `parseStoppoleParams` が nil のとき空配列を返していて、
 /// 該当系統（勝どき橋南詰の業１０など）の定刻が黙って出ないままになっていた。
+///
+/// フィクスチャはいずれも勝どき橋南詰（slst=325）で 2026-08-14〜15 に取得したもの。
+/// `timetable_direct_gyo10.html` が**休日ダイヤ**を申告しているのは、
+/// 取得日が土曜だったうえに**お盆の週**で、多くの系統が休日ダイヤで運行していたため
+/// （同じ停留所でも系統ごとに区分は異なり、325#1 は土曜ダイヤだった）。
+/// テストはHTMLに埋め込まれた申告を読むだけなので実行日には依存しないが、
+/// 期待値の「休日」を暦から導けるものと誤解しないこと。
 final class TimetableParsingTests: XCTestCase {
 
     private func fixture(_ name: String) throws -> String {

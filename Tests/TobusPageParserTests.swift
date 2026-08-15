@@ -5,6 +5,10 @@ import XCTest
 /// tobus.jp は公式APIではなくHTML画面をそのまま解析しているため、
 /// 先方の構造変更に気づく手段がここしか無い。フィクスチャは
 /// `Tests/Fixtures/stop325.html`（勝どき橋南詰、2026-08-14 21時ごろ取得）。
+///
+/// 分待の値や接近中のバスの有無は**この取得時点のスナップショット**であり、
+/// 系統・時間帯によって変わる性質のもの。期待値を「いつでもこうなる」と読まないこと
+/// （例: 業１０に接近中のバスがいないのはこの時刻にたまたま1台も出ていなかったため）。
 final class TobusPageParserTests: XCTestCase {
 
     private func fixture(_ name: String) throws -> String {
