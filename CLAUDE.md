@@ -1,29 +1,16 @@
 # 新規クローン直後のセットアップ
 
-`TobusWidget.xcodeproj` / `Info.plist` / `*.entitlements` は `project.yml` から生成する
-ファイルで、`.gitignore` によりリポジトリには含まれていない。クローン直後は以下が必要。
+`TobusWidget.xcodeproj` / `Info.plist` / `*.entitlements` は `project.yml` から生成され、
+`.gitignore` によりリポジトリに含まれていない。**クローン直後や `project.yml` を編集した後は
+`xcodegen generate` が必要**で、忘れると `xcodebuild` はプロジェクトが無いという分かりにくい
+失敗をする（`brew install xcodegen`）。
 
-```sh
-# 1. XcodeGen が未インストールなら入れる
-brew install xcodegen
+初回ビルドは SwiftSoup を取りに行くのでネットワークが要る。
+`xcodebuild -resolvePackageDependencies -project TobusWidget.xcodeproj -scheme TobusWidget`
+で事前解決だけ行うこともできる。
 
-# 2. project.yml からXcodeプロジェクト一式を生成する
-#    （Info.plist / entitlements / .xcodeproj もこの時点で作られる）
-xcodegen generate
-```
-
-`xcodegen generate` を実行しないと `xcodebuild` はプロジェクトファイルが無くて失敗するので、
-このリポジトリで初めてビルドするときは必ず先に行うこと。`project.yml` を編集したときも
-再実行が必要（README の「構成」参照）。
-
-このプロジェクトはSwiftPM経由で [SwiftSoup](https://github.com/scinfu/SwiftSoup)（HTML解析）に
-依存している。初回ビルド時にネットワーク経由でパッケージを取得するため、インターネット接続が必要。
-`xcodebuild -resolvePackageDependencies -project TobusWidget.xcodeproj -scheme TobusWidget` で
-事前解決だけ行うこともできる。
-
-ここまで終えたら、下記の「署名付きビルドコマンド」に進む。Xcode.app から GUI でビルドする場合は
-`open TobusWidget.xcodeproj` した上で、README の「Signing & Capabilities」の手順（両ターゲットに
-自分の Team を設定）に従うこと。
+ここまで済んだら `./scripts/deploy-local.sh`（後述）へ。GUI でビルドする場合は README の
+「ビルドと導入」に従うこと。
 
 # ビルドについて（重要）
 
@@ -42,129 +29,72 @@ xcodegen generate
 
 ## 2. `CONFIGURATION_BUILD_DIR` を独自パスに上書きしないこと（既知の問題）
 
-このプロジェクトはSwiftPMパッケージ（SwiftSoup）に依存している。`CONFIGURATION_BUILD_DIR=build`
-のようにビルド成果物の出力先を独自パスへ上書きすると、Xcodeの新ビルドシステムが
-パッケージ成果物（`SwiftSoup.swiftmodule`）を依存先ターゲット（特に `TobusWidgetExtension`）へ
-コピーするタイミングと、依存先ターゲットのSwiftモジュール探索タイミングがずれ、
+SwiftPM 成果物（`SwiftSoup.swiftmodule`）のコピーとモジュール探索のタイミングがずれ、
+`error: unable to resolve module dependency: 'SwiftSoup'` で失敗する
+（理由の詳細は README「ビルドと導入」の注記）。
 
-```
-error: unable to resolve module dependency: 'SwiftSoup'
-```
+ここに書き足す価値があるのは、**リトライでは直らない**という点。同一コマンドを2〜3回試しても、
+DerivedData を完全に消しても再発することを確認済み。指定せず標準の DerivedData 配下に
+ビルドすれば通るので、成果物が要る場合はビルド後にコピーする（`scripts/deploy-local.sh` がそうしている）。
 
-で失敗することがある（Xcode 16 / Swift Explicit Modules まわりの既知の相性問題。SwiftSoup自体の
-コンパイルは成功するが、それを利用する側のターゲットが見つけられない）。**同一のビルドコマンドを
-2〜3回リトライしても直らないことを確認済み**（DerivedDataを完全に消してもTeamをそのままにしても
-再発する）。`CONFIGURATION_BUILD_DIR` を指定せず、標準のDerivedData配下にビルドすれば問題なく
-成功する。成果物が必要な場合は、ビルド後にDerivedDataから明示的にコピーする。
+## ビルド・テスト・配置
 
-## 署名付きビルドコマンド
-
-証明書名と Team ID は環境ごとに異なる個人情報なので、このファイル（公開リポジトリに含まれる想定）には書かない。
-まず手元の証明書を確認する。
+よく使う手順は `scripts/` にまとめてある。**手順を間違えると症状が分かりにくい**
+（無署名だとウィジェットが更新されない、拡張プロセスを落とし忘れると古いコードが動き続ける）ため、
+手で組み立てず基本はこれを使う。
 
 ```sh
-security find-identity -v -p codesigning
+./scripts/test.sh              # 単体テスト（-v で xcodebuild の全出力）
+./scripts/deploy-local.sh      # ビルドして ~/Applications へ配置し直し、起動する
+./scripts/deploy-local.sh /Applications   # 配置先を変える
 ```
 
-表示された証明書名から、次のコマンドで Team ID（OU）を確認できる。
+Team ID は環境ごとに異なる個人情報なのでリポジトリには書かず、手元の「Apple Development」
+証明書の OU から自動で引いている（`scripts/_common.sh`）。証明書が複数ある環境では
+`DEVELOPMENT_TEAM=XXXXXXXXXX ./scripts/deploy-local.sh` のように明示する。
 
-```sh
-security find-certificate -c "<証明書名>" -p | openssl x509 -noout -subject
-```
+`deploy-local.sh` は配置後に `TeamIdentifier` を検査し、`not set`（＝無署名）なら失敗で止まる。
+AppIntents は署名の Team ID が無いと解決できず、**ウィジェットがプレースホルダのまま止まる**ため。
 
-それらを使ってビルドする（`CONFIGURATION_BUILD_DIR` は指定しない）。
+自分で `xcodebuild` を組み立てる場合は `CONFIGURATION_BUILD_DIR` を指定しないこと（前述の理由）。
+無署名でコンパイルの通過だけ見たいときは次のとおり（`/Applications/` へは配置しない）。
 
 ```sh
 xcodebuild -project TobusWidget.xcodeproj -scheme TobusWidget \
   -configuration Debug -destination 'platform=macOS' \
-  -allowProvisioningUpdates \
-  CODE_SIGN_STYLE=Automatic \
-  CODE_SIGN_IDENTITY="Apple Development" \
-  DEVELOPMENT_TEAM=<Team ID> \
-  build
+  CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO build
 ```
 
-`CODE_SIGN_STYLE=Manual` + 個別の証明書名を指定する方法（[[江戸バス版]]と同じ流儀）でも動くが、
-このプロジェクトではApp Groupのみで追加のプロビジョニングプロファイルが要らないため、
-`Automatic` + `-allowProvisioningUpdates` の方が手数が少ない。
+起動しただけではウィジェットは画面に出ない。通知センターまたはデスクトップの
+「ウィジェットを編集」から追加する（README の「ビルドと導入」参照）。
 
-ビルド成果物はDerivedData配下（`~/Library/Developer/Xcode/DerivedData/TobusWidget-*/Build/Products/Debug/`）
-に生成される。バンドル名は `TobusWidget.app`。実機確認用にコピーする場合は次のようにする。
-
-```sh
-APP=$(find ~/Library/Developer/Xcode/DerivedData -maxdepth 1 -iname "TobusWidget-*" \
-  -exec find {}/Build/Products/Debug -maxdepth 1 -name "TobusWidget.app" \; | head -1)
-cp -R "$APP" /path/to/destination/
-```
-
-## テスト
-
-```sh
-xcodebuild test -project TobusWidget.xcodeproj -scheme TobusWidget -destination 'platform=macOS' \
-  -allowProvisioningUpdates CODE_SIGN_STYLE=Automatic \
-  CODE_SIGN_IDENTITY="Apple Development" DEVELOPMENT_TEAM=<Team ID>
-```
+## テストの構成
 
 `TobusWidgetTests` は**ホストアプリを立てない**単体テスト（`Shared` のソースを直接取り込む構成）。
 `TobusWidget` をテストホストにすると常駐アプリが起動して初回取得の通信が走るため、あえてそうしている。
 したがってテストは通信せず、`AppSettings`（UserDefaults）にも触らない。
 
-対象は「壊れても気づきにくい」2箇所に絞ってある。
+対象は「壊れても気づきにくい」ところに絞ってある。
 
-- `TobusPageParserTests` — 実ページのHTML（`Tests/Fixtures/stop325.html`、勝どき橋南詰）に対する解析。
+- `TobusPageParserTests` — 実ページのHTML（`Tests/Fixtures/`、勝どき橋南詰）に対する解析。
   tobus.jp は公式APIではないので、先方のHTML構造が変わったことに気づく手段がここしか無い。
   フィクスチャを更新するときは `curl 'https://tobus.jp/blsys/navi?VCD=csrst&ECD=NEXT&LCD=&func=fap&method=msn&slst=325'`
-  で取り直し、期待値（系統数・分待の値）も併せて直すこと
+  で取り直し、期待値（系統数・分待の値）も併せて直すこと。
+  期待値は**取得時点のスナップショット**であって「いつでもこうなる」値ではない
 - `RouteResolutionTests` — `BusDirectoryService.resolve` の多段引き当て。
   tobus.jp 側の並び順が実際に変わらないと再現できない経路なので、ここでしか担保できない
-
-無署名でコンパイルの通過だけ確認したい場合（`/Applications/` へは配置しない）:
-
-```sh
-xcodebuild -project TobusWidget.xcodeproj -scheme TobusWidget \
-  -configuration Debug -destination 'platform=macOS' \
-  CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO \
-  build
-```
-
-## 実機（ウィジェット）で確認する場合の反映手順
-
-ビルドしただけでは配置済みのウィジェットには反映されない。実際に使っているコピーは
-`/Applications/TobusWidget.app`（または `~/Applications/TobusWidget.app`）なので、
-確認のたびに次の手順で入れ替える。アプリの起動/終了は表示名が日本語で紛らわしいため、
-`osascript ... tell application "TobusWidget"` ではなく **bundle ID** で指定すること。
-
-```sh
-# 1. 実行中のプロセスを終了
-osascript -e 'tell application id "com.example.TobusWidget" to quit'
-pkill -f "MacOS/TobusWidget$"
-pkill -f "TobusWidgetExtension"
-
-# 2. 署名付きビルドを配置し直す（上記の$APPを使う）
-LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
-rm -rf "/Applications/TobusWidget.app"
-cp -R "$APP" /Applications/
-# 古いパスの登録が残っていると混乱するので明示的に再登録する
-"$LSREGISTER" -f -R -trusted "/Applications/TobusWidget.app"
-open "/Applications/TobusWidget.app"
-```
-
-`codesign -dv "/Applications/TobusWidget.app/Contents/PlugIns/TobusWidgetExtension.appex"` の
-`TeamIdentifier` が実際の Team ID になっていることを確認できる（`TeamIdentifier=not set` なら無署名ビルドが紛れ込んでいる）。
-
-初回（まだ配置済みのアプリが存在しない環境）は `quit` / `pkill` は何もせず失敗するだけなので
-無視してよい。また、起動しただけではウィジェットは画面に出ない。通知センターまたはデスクトップの
-「ウィジェットを編集」から「都バス接近情報」を追加する必要がある（README の「ビルドと導入」参照）。
+- `TimetableParsingTests` — 行き先選択ページと、時刻表が直接返るページの両方
+- `BusTimeTests` — 定刻の日またぎ・深夜便（25時表記）の変換
 
 ## データソース（tobus.jp）固有の注意
 
-- APIキー等の登録は不要。江戸バス版と違い、起動直後からバス停検索・系統選択が使える
-- tobus.jpは公式APIではなくHTMLスクレイピング。パース処理は `Shared/TobusPageParser.swift`
-  （SwiftSoup使用）に集約している。tobus.jp側のHTML構造が変わった場合はここを見直す
-- 主要エンドポイント（README「データソースについて」参照）はステートレスなGETで、
-  `JSESSIONID` Cookieの継続は不要と確認済み（2026-08-14時点、`curl`で無Cookie検証済み）
-- サーバー側エッジキャッシュが60秒（`Cache-Control: s-maxage=60`）。アプリ内キャッシュ
-  （`TobusPageService`、50秒）もこれに合わせている
+エンドポイント一覧・仕様・利用条件は README「データソースについて」にある。ここには
+**コードを触るときに効く注意点だけ**を書く。
+
+- パース処理は `Shared/TobusPageParser.swift`（SwiftSoup使用）に集約している。
+  tobus.jp側のHTML構造が変わった場合はここだけを見直せばよい
+- ステートレスなGETで `JSESSIONID` の継続は不要（2026-08-14に `curl` で無Cookie検証済み）。
+  サーバー側60秒 / アプリ内 `TobusPageService` 50秒のキャッシュ段構成
 - 定刻（`Shared/BusScheduleService.swift`）は原則「行き先選択」ページ→「時刻表本体」ページの
   2段階フェッチだが、**行き先が1つしかない系統では1段階目で時刻表そのものが返る**。
   この場合ページに `func_stoppole` が無く `parseStoppoleParams` が nil になるので、
@@ -222,7 +152,7 @@ open "/Applications/TobusWidget.app"
 
   ```
   Launch failed with error: ... Extension `com.example.TobusWidget.Widget`,
-  URL `file:///Users/st/Applications/%E9%83%BD%E3%83%8F%E3%82%99%E3%82%B9....app/...`
+  URL `file:///Users/<user>/Applications/%E9%83%BD%E3%83%8F%E3%82%99%E3%82%B9....app/...`
   not found in LS database
   → chronod: Reload failed ... "Unknown extension process"
   ```

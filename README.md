@@ -103,13 +103,26 @@ Xcode で以下を行ってください。
 2. スキーム `TobusWidget` を選んで実行（⌘R）する
    （Dock には出ず、メニューバーにバスのアイコンが常駐します）
 3. メニューバーアイコンをクリックし、バス停名で検索して選び、系統を選ぶ
-4. 通知センターまたはデスクトップで「ウィジェットを編集」から「都バス接近情報」を追加する
+4. 通知センターまたはデスクトップで「ウィジェットを編集」を開き、左の一覧から **TobusWidget** を選んで、
+   ウィジェット「都バス接近情報」を追加する
    （ウィジェットごとに個別のバス停・系統を選べます）
+
+> 一覧に出るアプリ名が `TobusWidget` なのは、ウィジェットギャラリーが `CFBundleDisplayName` ではなく
+> `.app` のファイル名を見ているためです。ここを日本語にするとウィジェット拡張が起動しなくなるので、
+> ファイル名は ASCII のままにしています（メニューバー等の表示名は「都バス接近情報」です）。
 
 常時使う場合は、システム設定 →「一般」→「ログイン項目」に登録しておくと便利です。
 
 バンドル ID は `com.example.TobusWidget`（プレースホルダ）です。自分の環境で使う場合は
 `project.yml` の `bundleIdPrefix` と `PRODUCT_BUNDLE_IDENTIFIER` を書き換えてください。
+あわせて、次は `project.yml` から生成されず**追従しない**ので手で直す必要があります。
+
+- `Shared/AppSettings.swift` の `Notification.Name(...)` 2つ
+  （アプリとウィジェット間の通知名。`DistributedNotificationCenter` はマシン全体に配信されるため、
+  他のアプリと衝突しない固有の名前にしておくのが安全です）
+- `scripts/_common.sh` の `BUNDLE_ID`（アプリの終了に使います）
+- ログを見るときの `subsystem`（`busLogger` は `Bundle.main.bundleIdentifier` を使うため、
+  バンドル ID を変えたら `log stream` の述語も読み替えます）
 
 App Group は、アプリとウィジェットの間で選択状態・一時停止フラグ・接近状況のスナップショットを
 共有するために使っています。macOS では識別子に Team ID のプレフィックスが必須なため、
@@ -130,6 +143,20 @@ App Group は、アプリとウィジェットの間で選択状態・一時停�
 > コマンドラインでビルドする場合は `CONFIGURATION_BUILD_DIR` を指定せず、標準のDerivedDataに
 > ビルドしてから、必要なら成果物をコピーしてください。
 
+コマンドラインからビルドして配置する場合は、付属のスクリプトを使ってください。
+ビルド、実行中プロセスの終了、配置、LaunchServices への再登録、署名の検証までを行います。
+
+```sh
+./scripts/deploy-local.sh                 # ~/Applications へ配置
+./scripts/deploy-local.sh /Applications   # 配置先を指定
+./scripts/test.sh                         # 単体テスト
+```
+
+Team ID は手元の「Apple Development」証明書から自動で引きます。証明書が複数ある環境では
+`DEVELOPMENT_TEAM=YOURTEAMID ./scripts/deploy-local.sh` のように指定してください。
+
+手で行う場合のビルドコマンドは次のとおりです。
+
 ```sh
 xcodebuild -project TobusWidget.xcodeproj -scheme TobusWidget \
   -configuration Debug -destination 'platform=macOS' \
@@ -138,13 +165,25 @@ xcodebuild -project TobusWidget.xcodeproj -scheme TobusWidget \
   CODE_SIGN_IDENTITY="Apple Development" \
   DEVELOPMENT_TEAM=YOURTEAMID \
   build
+```
 
-# ビルド成果物はDerivedData配下に生成される。必要ならコピーする。
-# .app のファイル名は TobusWidget.app。メニューバー等での表示名だけが「都バス接近情報」。
+成果物は DerivedData 配下に生成されます（`.app` のファイル名は `TobusWidget.app`）。
+**配置済みのアプリを入れ替えるときは、単にコピーするだけでは不十分です。**
+実行中のアプリとウィジェット拡張のプロセスを終了し、コピー後に LaunchServices へ登録し直さないと、
+ウィジェットが更新されなかったり、中身が空のまま表示されたりすることがあります
+（アプリの終了は表示名が日本語で紛らわしいため bundle ID で指定します）。
+
+```sh
 APP=$(find ~/Library/Developer/Xcode/DerivedData -maxdepth 1 -iname "TobusWidget-*" \
   -exec find {}/Build/Products/Debug -maxdepth 1 -name "TobusWidget.app" \; | head -1)
+LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
+
+osascript -e 'tell application id "com.example.TobusWidget" to quit' 2>/dev/null
+pkill -f "MacOS/TobusWidget$"; pkill -f "TobusWidgetExtension"
+rm -rf /Applications/TobusWidget.app
 cp -R "$APP" /Applications/
-open "/Applications/TobusWidget.app"
+"$LSREGISTER" -f -R -trusted /Applications/TobusWidget.app
+open /Applications/TobusWidget.app
 ```
 
 ## バス停・系統の選び方
@@ -236,7 +275,14 @@ Shared/
   AppSettings.swift          App Group経由の共有設定・接近状況/定刻スナップショット
 App/                       メニューバー常駐アプリ（ウィジェットの更新もここから行う）
 WidgetExtension/           ウィジェット本体（通信は一切行わず、共有スナップショットを読むだけ）
+Tests/                     単体テスト（実ページのHTMLフィクスチャを含む）
+scripts/
+  deploy-local.sh            ビルドして ~/Applications へ配置し直し、起動する
+  test.sh                    単体テストを実行する
 ```
+
+開発中の動作確認は `./scripts/deploy-local.sh` を使うと、ビルドから配置・再起動・署名の検証までを
+まとめて行えます（Team ID は手元の証明書から自動で引きます）。
 
 `Info.plist` と `*.entitlements` は `project.yml` から生成されるため、リポジトリには含めていません。
 設定を変えるときは `project.yml` を編集して `xcodegen generate` を実行してください。
