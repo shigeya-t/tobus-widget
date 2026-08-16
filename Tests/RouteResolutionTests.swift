@@ -150,6 +150,23 @@ final class RouteResolutionTests: XCTestCase {
         XCTAssertEqual(match.ordinal, 2)
     }
 
+    /// 並びがずれたとき、`resolve` が返すブロックは**保存済みの安定ID**を持つため、
+    /// いま取得した一覧の同じ系統とは `Hashable` 的に一致しない（`id` だけが違う）。
+    /// 画面の突き合わせに `RouteBlock` をそのまま使うと選択が外れて見えるので、
+    /// ピッカーは `ordinal` で照合している（`ArrivalModel.selectedRouteOrdinal`）。
+    func testResolvedBlockIsNotEqualToTheSameRouteInCurrentListing() throws {
+        let listing = blocks([(0, "業１０", "新橋 行", 40, 1)])
+        let saved = identity(label: "業１０", dest: "新橋 行", rtmcd: 40, pl: 1)
+        let resolved = try XCTUnwrap(
+            BusDirectoryService.resolve(id: "325#5", ordinal: 5, identity: saved, in: listing)
+        )
+
+        XCTAssertEqual(resolved.ordinal, listing[0].ordinal, "同じ系統を指している")
+        XCTAssertNotEqual(resolved, listing[0], "id が違うので Hashable としては別物になる")
+        XCTAssertEqual(resolved.id, "325#5")
+        XCTAssertEqual(listing[0].id, "325#0")
+    }
+
     // MARK: - id の安定性
 
     /// id は "slst#ordinal" として解釈でき、往復しても壊れない。

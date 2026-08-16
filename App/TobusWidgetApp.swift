@@ -48,6 +48,16 @@ final class ArrivalModel: ObservableObject {
         }
     }
     @Published var routeBlocks: [RouteBlock] = []
+
+    /// 系統ピッカー用の選択。`RouteBlock` は `id` 込みで `Hashable` だが、
+    /// 復元した `selectedRoute` は**保存済みの安定ID**を持つ一方、`routeBlocks` の要素は
+    /// **現在の並び順から作られたID**を持つ。並びがずれた直後は同じ系統でもIDが食い違い、
+    /// `selectedRoute` をそのままタグに使うとピッカーが未選択に見える。
+    /// 安定IDは保存のためだけのものなので、画面上の突き合わせは並び順で行う。
+    var selectedRouteOrdinal: Int? {
+        get { selectedRoute?.ordinal }
+        set { selectedRoute = newValue.flatMap { ordinal in routeBlocks.first { $0.ordinal == ordinal } } }
+    }
     @Published var selectedRoute: RouteBlock? {
         didSet {
             guard selectedRoute != oldValue else { return }
@@ -132,6 +142,8 @@ final class ArrivalModel: ObservableObject {
             guard generation == searchGeneration else { return }
             busLogger.error("performSearch failed: \(String(describing: error), privacy: .public)")
             stopResults = []
+            // 黙って空にすると「ヒットなし」と区別がつかず、通信断に気づけない。
+            searchHint = "検索できませんでした（\(error.localizedDescription)）"
         }
     }
 
@@ -214,11 +226,27 @@ final class ArrivalModel: ObservableObject {
         routeBlocks = fetched
         errorText = nil
 
-        // 保存済みの ordinal を流用してよいのは、同じ停留所に戻ってきたときだけ。
+        // 保存済みの選択を復元してよいのは、同じ停留所に戻ってきたときだけ。
         // 別の停留所では ordinal は単なるページ内の並び順なので、前の停留所のN番目に
         // 相当する無関係な系統を選んでしまう。
+        //
+        // 同じ停留所でも ordinal 直当てでは足りない。tobus.jp 側でのりばや系統が増えると
+        // 並び順がずれ、保存した「N番目」が別系統になる。ウィジェットと同じ多段引き当て
+        // （RTMCD → 系統名+行き先 → ordinal）を使う。手がかりは `saveSelection()` が
+        // `routeIdentity` として書いてある。
         let saved = loadSelection()
-        let restored = saved.slst == slst ? fetched.first { $0.ordinal == saved.ordinal } : nil
+        var restored: RouteBlock?
+        if saved.slst == slst {
+            // 保存済みIDをそのまま使う。無いのは旧バージョンからの移行時だけで、
+            // そのときに限り ordinal から組み立てる（以降は安定IDが保存される）。
+            let id = saved.routeID ?? "\(slst)#\(saved.ordinal)"
+            restored = BusDirectoryService.resolve(
+                id: id,
+                ordinal: saved.ordinal,
+                identity: AppSettings.routeIdentity(routeID: id),
+                in: fetched
+            )
+        }
         selectedRoute = restored ?? fetched.first
     }
 
@@ -249,6 +277,10 @@ final class ArrivalModel: ObservableObject {
 
             // 時刻表は1日1回取得できれば十分なため（BusScheduleService側で日次キャッシュ済み）、
             // 60秒ごとの本処理内で呼んでもコストは小さい。
+            //
+            // 読み取れなかった場合は例外になるので、この節ごと飛ばして前回の表示を保つ
+            // （接近情報の失敗時と同じ扱い）。時刻表を持たない系統は空が返るので、
+            // その場合は `scheduled` が空になり定刻の行が消える。
             if let timetable = try? await BusScheduleService.fetchTimetable(for: route) {
                 AppSettings.saveSchedule(timetable, routeID: route.id)
                 guard isCurrent() else { return }
@@ -340,13 +372,15 @@ final class ArrivalModel: ObservableObject {
         guard let route = selectedRoute else { return }
         AppSettings.selectedSlst = route.slst
         AppSettings.selectedOrdinal = route.ordinal
+        // 復元のキーはこの安定IDを使う（現在の並び順から組み立て直さない）。
+        AppSettings.selectedRouteID = route.id
         // ウィジェット設定と同じ系統をメニューバーでも選んでいる場合に、
         // 並び順が変わったときの引き当て手がかりを最新に保つ。
         AppSettings.saveRouteIdentity(route)
     }
 
-    private func loadSelection() -> (slst: Int, ordinal: Int) {
-        (AppSettings.selectedSlst, AppSettings.selectedOrdinal)
+    private func loadSelection() -> (slst: Int, ordinal: Int, routeID: String?) {
+        (AppSettings.selectedSlst, AppSettings.selectedOrdinal, AppSettings.selectedRouteID)
     }
 }
 
@@ -441,9 +475,9 @@ struct MenuContent: View {
         Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 8) {
             GridRow {
                 Text("系統").foregroundStyle(.secondary)
-                Picker("", selection: $model.selectedRoute) {
+                Picker("", selection: $model.selectedRouteOrdinal) {
                     ForEach(model.routeBlocks) { route in
-                        Text(route.displayName).tag(Optional(route))
+                        Text(route.displayName).tag(Optional(route.ordinal))
                     }
                 }
                 .labelsHidden()

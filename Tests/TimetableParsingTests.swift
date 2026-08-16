@@ -79,6 +79,34 @@ final class TimetableParsingTests: XCTestCase {
         )
     }
 
+    /// 時刻表として読めないページ（HTTP 200 で返るエラーページなど）は、表が空の結果になる。
+    /// この「表が空」がキャッシュ・保存をスキップする判定条件になっているので固定しておく。
+    /// 空をキャッシュすると日付が変わるまで、空を保存すると次の成功まで定刻が消える。
+    func testUnparsablePageYieldsEmptyTables() throws {
+        let notATimetable = "<html><body><h1>ただいまアクセスが集中しています</h1></body></html>"
+        let parsed = try TobusPageParser.parseTimetable(html: notATimetable)
+        XCTAssertTrue(parsed.tables.isEmpty)
+        XCTAssertNil(parsed.todayKind)
+        XCTAssertTrue(parsed.upcoming(now: Date()).dates.isEmpty)
+    }
+
+    /// 空の結果で保存済みの定刻を上書きしないこと。
+    /// 取得に失敗した回に空を書くと、次に取り直せるまで定刻が消える。
+    func testSaveScheduleKeepsPreviousValueWhenNewOneIsEmpty() throws {
+        let routeID = "test-\(UUID().uuidString)"
+        addTeardownBlock { UserDefaults.standard.removeObject(forKey: "schedule.\(routeID)") }
+
+        let good = ParsedTimetable(tables: ["平日": [BusTime(hour: 6, minute: 50)]], todayKind: "平日")
+        AppSettings.saveSchedule(good, routeID: routeID)
+        XCTAssertEqual(AppSettings.schedule(routeID: routeID), good)
+
+        AppSettings.saveSchedule(.empty, routeID: routeID)
+        XCTAssertEqual(
+            AppSettings.schedule(routeID: routeID), good,
+            "空で上書きせず、前回の値を残す"
+        )
+    }
+
     /// 見出しはダイヤ区分が分かるときだけ添える。
     func testScheduleHeadingIncludesKindWhenKnown() {
         XCTAssertEqual(TobusConfig.scheduleHeading(kind: "土曜"), "定刻（土曜ダイヤ）")

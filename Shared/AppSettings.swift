@@ -28,6 +28,7 @@ enum AppSettings {
         static let isPaused = "isPaused"
         static let slst = "selectedSlst"
         static let ordinal = "selectedOrdinal"
+        static let routeID = "selectedRouteID"
         static func snapshot(_ routeID: String) -> String { "snapshot.\(routeID)" }
         static func routeIdentity(_ routeID: String) -> String { "routeIdentity.\(routeID)" }
         static func schedule(_ routeID: String) -> String { "schedule.\(routeID)" }
@@ -70,6 +71,17 @@ enum AppSettings {
     static var selectedOrdinal: Int {
         get { defaults.integer(forKey: Keys.ordinal) }
         set { defaults.set(newValue, forKey: Keys.ordinal) }
+    }
+
+    /// メニューバーで選んだ系統の識別子（`RouteBlock.id`）。
+    ///
+    /// **復元時にこれを現在の `ordinal` から組み立て直してはいけない。**
+    /// `saveRouteIdentity` は安定した `id` をキーに書くので、並び順が一度ずれると
+    /// `"slst#ordinal"` で組み立てたキーが識別情報とずれ、以降ずっと引き当てに失敗する。
+    /// 旧バージョンからの移行時のみ nil になり、そのときだけ ordinal から組み立てる。
+    static var selectedRouteID: String? {
+        get { defaults.string(forKey: Keys.routeID) }
+        set { defaults.set(newValue, forKey: Keys.routeID) }
     }
 
     // MARK: - 最後に取得した接近状況
@@ -170,7 +182,10 @@ enum AppSettings {
     ///
     /// 平日・土曜・休日の3区分をまとめて保存する。翌日の始発を前夜に出すには、
     /// 本日とは別の区分の表が要るため（`ParsedTimetable.upcoming` 参照）。
+    /// 空の結果で既存の保存を上書きしない。取得に失敗した回（HTTP 200 で返るエラーページなど）に
+    /// 空を書いてしまうと、次に取り直せるまで定刻が消える。前回の値を残す方が実害が小さい。
     static func saveSchedule(_ timetable: ParsedTimetable, routeID: String) {
+        guard !timetable.tables.isEmpty else { return }
         guard let data = try? JSONEncoder().encode(timetable) else { return }
         defaults.set(data, forKey: Keys.schedule(routeID))
     }
