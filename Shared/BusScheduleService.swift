@@ -24,7 +24,7 @@ enum BusScheduleService {
             // （例: 勝どき橋南詰の業１０）。この場合 `func_stoppole` が無いので、
             // 2段階目に進まず、いま取得したHTMLをそのまま時刻表として読む。
             let parsed = try TobusPageParser.parseTimetable(html: selectHTML)
-            if parsed.times.isEmpty {
+            if parsed.tables.isEmpty {
                 busLogger.error("行き先選択・時刻表のどちらとしても読めません（slst=\(route.slst, privacy: .public), pl=\(pl, privacy: .public), RTMCD=\(rtmcd, privacy: .public)）")
             }
             await cache.store(parsed, for: key)

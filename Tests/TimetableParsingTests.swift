@@ -51,7 +51,7 @@ final class TimetableParsingTests: XCTestCase {
     /// その同じHTMLは、時刻表としてはそのまま読める。
     /// `BusScheduleService` はこれを頼りにフォールバックしている。
     func testSameHTMLParsesDirectlyAsTimetable() throws {
-        let times = try TobusPageParser.parseTimetable(html: try fixture("timetable_direct_gyo10")).times
+        let times = try TobusPageParser.parseTimetable(html: try fixture("timetable_direct_gyo10")).todayTimes
         XCTAssertFalse(times.isEmpty, "業１０の定刻が取れていない")
         XCTAssertEqual(times, times.sorted(), "時刻順に並んでいる")
 
@@ -67,8 +67,16 @@ final class TimetableParsingTests: XCTestCase {
         let parsed = try TobusPageParser.parseTimetable(html: html)
 
         XCTAssertTrue(html.contains("getElementById('休日')"), "フィクスチャは休日ダイヤを申告している")
-        XCTAssertEqual(parsed.scheduleKind, "休日", "ページの申告どおりの区分を返す")
-        XCTAssertFalse(parsed.times.isEmpty)
+        XCTAssertEqual(parsed.todayKind, "休日", "ページの申告どおりの区分を返す")
+        XCTAssertFalse(parsed.todayTimes.isEmpty)
+        XCTAssertEqual(
+            Set(parsed.tables.keys), ["平日", "土曜", "休日"],
+            "翌日分を出すために3区分すべて保持する"
+        )
+        XCTAssertNotEqual(
+            parsed.tables["平日"], parsed.tables["休日"],
+            "区分ごとに別の時刻表であること（使い回すと翌日の始発を誤る）"
+        )
     }
 
     /// 見出しはダイヤ区分が分かるときだけ添える。

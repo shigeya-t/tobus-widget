@@ -4,10 +4,27 @@ enum TobusConfig {
     static let timeZone = TimeZone(identifier: "Asia/Tokyo")!
     static let unconfiguredStopName = "バス停未設定"
 
-    /// 定刻の見出し。当日のダイヤ区分が分かっていれば「定刻（土曜ダイヤ）」のように添える。
-    /// 区分は tobus.jp の時刻表ページが申告している `平日` / `土曜` / `休日`。
-    static func scheduleHeading(kind: String?) -> String {
-        guard let kind, !kind.isEmpty else { return "定刻" }
-        return "定刻（\(kind)ダイヤ）"
+    /// 定刻の見出し。
+    /// 本日分は tobus.jp の申告どおりの区分を「定刻（土曜ダイヤ）」のように添える。
+    /// 翌日分に切り替わったときは、**推定した区分であることが分かるように**「翌 平日ダイヤ」と出す。
+    static func scheduleHeading(kind: String?, isNextDay: Bool = false) -> String {
+        guard let kind, !kind.isEmpty else { return isNextDay ? "翌日の定刻" : "定刻" }
+        return isNextDay ? "翌 \(kind)ダイヤ" : "定刻（\(kind)ダイヤ）"
+    }
+
+    /// 指定日のダイヤ区分を曜日から推定する（月〜金→平日、土→土曜、日→休日）。
+    ///
+    /// **本日の区分にこれを使ってはいけない。** tobus.jp は実際の運行区分をページで申告しており、
+    /// 暦とは一致しない（2026-08-15の土曜は、お盆のため多くの系統が休日ダイヤだった）。
+    /// これは「翌日の始発を前夜に出す」ためだけの推定で、祝日も判定していない。
+    /// 外れうる値なので、表示側は必ず区分名を添えて推定と分かるようにすること。
+    static func estimatedScheduleKind(on date: Date) -> String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        switch calendar.component(.weekday, from: date) {
+        case 1: return "休日"
+        case 7: return "土曜"
+        default: return "平日"
+        }
     }
 }

@@ -23,13 +23,50 @@ struct ParsedBlock {
 }
 
 /// 時刻表ページの解析結果。
-struct ParsedTimetable {
-    let times: [BusTime]
-    /// ページ自身が申告している当日のダイヤ区分（`平日` / `土曜` / `休日`）。読み取れなければ nil。
-    /// 表のIDがそのままこの文字列になっており、`times` はこの区分の表から取っている。
-    let scheduleKind: String?
+///
+/// ページには平日・土曜・休日の3つの表がすべて含まれているため、全部を保持する。
+/// 本日どれを使うかはページ自身が申告してくるが（`todayKind`）、**翌日どれになるかは
+/// ページからは分からない**ため、翌日分を出すときは呼び出し側が区分を決めて選ぶ
+/// （[[TobusConfig]] の `estimatedScheduleKind(on:)`）。
+struct ParsedTimetable: Codable, Equatable {
+    /// ダイヤ区分（`平日` / `土曜` / `休日`）ごとの時刻表。
+    let tables: [String: [BusTime]]
+    /// ページが「本日は〇曜ダイヤで運行しております」と申告している区分。読み取れなければ nil。
+    let todayKind: String?
 
-    static let empty = ParsedTimetable(times: [], scheduleKind: nil)
+    static let empty = ParsedTimetable(tables: [:], todayKind: nil)
+
+    /// 本日のダイヤ区分の時刻表。
+    var todayTimes: [BusTime] {
+        guard let todayKind else { return [] }
+        return tables[todayKind] ?? []
+    }
+
+    func times(kind: String?) -> [BusTime] {
+        guard let kind else { return [] }
+        return tables[kind] ?? []
+    }
+
+    /// 表示に使う「これから来る定刻」。
+    ///
+    /// 本日分が残っていればそれを返す。尽きていれば翌日の始発から返すが、そのとき
+    /// **今日と同じ表を使い回してはいけない**（日曜→月曜のようにダイヤ区分が変わる）。
+    /// 翌日の区分はページから分からないので曜日から推定し、推定であることを
+    /// `isNextDay` と `kind` で呼び出し側に伝える（見出しに区分名を出して判断できるようにする）。
+    func upcoming(now: Date = Date()) -> (dates: [Date], kind: String?, isNextDay: Bool) {
+        let remaining = BusTime.dates(from: todayTimes, on: now, after: now)
+        if !remaining.isEmpty {
+            return (remaining, todayKind, false)
+        }
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TobusConfig.timeZone
+        guard let tomorrow = calendar.date(byAdding: .day, value: 1, to: now) else {
+            return ([], todayKind, false)
+        }
+        let kind = TobusConfig.estimatedScheduleKind(on: tomorrow)
+        return (BusTime.dates(from: times(kind: kind), on: tomorrow), kind, true)
+    }
 }
 
 /// 「行き先選択」ページの `onclick="func_stoppole(...)"` から取れる、時刻表ページ本体を
@@ -231,10 +268,25 @@ enum TobusPageParser {
     static func parseTimetable(html: String) throws -> ParsedTimetable {
         let doc = try SwiftSoup.parse(html)
 
-        guard let todayTableId = try todayScheduleTableId(doc: doc),
-              let table = try doc.select("table[id=\(todayTableId)]").first()
-        else { return .empty }
+        // ページには平日・土曜・休日の表がすべて入っている。翌日分を出すために全部拾っておく
+        // （表のIDがそのままダイヤ区分の名前になっている）。
+        var tables: [String: [BusTime]] = [:]
+        for table in try doc.select("table[id]").array() {
+            let kind = try table.attr("id")
+            guard Self.scheduleKinds.contains(kind) else { continue }
+            let times = try Self.times(inTable: table)
+            guard !times.isEmpty else { continue }
+            tables[kind] = times
+        }
 
+        return ParsedTimetable(tables: tables, todayKind: try todayScheduleTableId(doc: doc))
+    }
+
+    /// 時刻表の表として想定しているID。これ以外のテーブル（案内文の枠など）は読み飛ばす。
+    private static let scheduleKinds: Set<String> = ["平日", "土曜", "休日"]
+
+    /// 「時」の見出し行＋分のセル、という構造から時刻を組み立てる。
+    private static func times(inTable table: Element) throws -> [BusTime] {
         var times: [BusTime] = []
         for row in try table.select("tr").array() {
             guard let hourText = try row.select("th").first()?.text(),
@@ -246,7 +298,7 @@ enum TobusPageParser {
                 times.append(BusTime(hour: hour, minute: minute))
             }
         }
-        return ParsedTimetable(times: times.sorted(), scheduleKind: todayTableId)
+        return times.sorted()
     }
 
     /// 「本日は、<a onclick="document.getElementById('土曜').scrollIntoView();">土曜ダイヤ</a>で運行しております。」

@@ -31,7 +31,6 @@ enum AppSettings {
         static func snapshot(_ routeID: String) -> String { "snapshot.\(routeID)" }
         static func routeIdentity(_ routeID: String) -> String { "routeIdentity.\(routeID)" }
         static func schedule(_ routeID: String) -> String { "schedule.\(routeID)" }
-        static func scheduleKind(_ routeID: String) -> String { "scheduleKind.\(routeID)" }
     }
 
     /// 一時停止中は、アプリもウィジェットも定期的な取得を行わない。
@@ -169,27 +168,16 @@ enum AppSettings {
     /// 時刻表は日をまたがない限り変わらないため、ウィジェット拡張は自分では取得せず、
     /// Appが取得したものをここ経由で読むだけにする。
     ///
-    /// ダイヤ区分は時刻の配列とは別のキーに入れている。`schedule.<id>` の中身を
-    /// 構造体に変えると、保存済みの値が読めなくなって次の取得まで定刻が消えるため。
+    /// 平日・土曜・休日の3区分をまとめて保存する。翌日の始発を前夜に出すには、
+    /// 本日とは別の区分の表が要るため（`ParsedTimetable.upcoming` 参照）。
     static func saveSchedule(_ timetable: ParsedTimetable, routeID: String) {
-        if let data = try? JSONEncoder().encode(timetable.times) {
-            defaults.set(data, forKey: Keys.schedule(routeID))
-        }
-        if let kind = timetable.scheduleKind, !kind.isEmpty {
-            defaults.set(kind, forKey: Keys.scheduleKind(routeID))
-        } else {
-            defaults.removeObject(forKey: Keys.scheduleKind(routeID))
-        }
+        guard let data = try? JSONEncoder().encode(timetable) else { return }
+        defaults.set(data, forKey: Keys.schedule(routeID))
     }
 
-    static func schedule(routeID: String) -> [BusTime]? {
+    static func schedule(routeID: String) -> ParsedTimetable? {
         guard let data = defaults.data(forKey: Keys.schedule(routeID)) else { return nil }
-        return try? JSONDecoder().decode([BusTime].self, from: data)
+        return try? JSONDecoder().decode(ParsedTimetable.self, from: data)
     }
 
-    /// 保存済みの時刻表がどのダイヤ区分のものか（`平日` / `土曜` / `休日`）。
-    static func scheduleKind(routeID: String) -> String? {
-        guard let kind = defaults.string(forKey: Keys.scheduleKind(routeID)), !kind.isEmpty else { return nil }
-        return kind
-    }
 }

@@ -1,8 +1,11 @@
 import XCTest
 
-/// 時刻表（時刻のみ）から「これから来る便」を絶対時刻へ変換する処理。
-/// アプリとウィジェット拡張の双方が同じ並びを出す必要があるため `BusTime.upcoming` に集約している。
-final class BusTimeTests: XCTestCase {
+/// 時刻表から「これから来る便」を選ぶ処理。
+///
+/// 本日分が尽きたら翌日の始発を出すが、**今日と同じダイヤ区分の表を使い回してはいけない**
+/// （日曜→月曜のように区分が変わる）。翌日の区分はページから分からないので曜日から推定し、
+/// 推定であることを `isNextDay` と `kind` で呼び出し側に伝える。
+final class TimetableSelectionTests: XCTestCase {
 
     private var calendar: Calendar {
         var calendar = Calendar(identifier: .gregorian)
@@ -11,57 +14,107 @@ final class BusTimeTests: XCTestCase {
     }
 
     private func date(_ month: Int, _ day: Int, _ hour: Int, _ minute: Int) -> Date {
-        var components = DateComponents()
-        components.year = 2026
-        components.month = month
-        components.day = day
-        components.hour = hour
-        components.minute = minute
-        return calendar.date(from: components)!
+        var c = DateComponents()
+        (c.year, c.month, c.day, c.hour, c.minute) = (2026, month, day, hour, minute)
+        return calendar.date(from: c)!
     }
 
-    private let timetable = [
-        BusTime(hour: 6, minute: 40),
-        BusTime(hour: 12, minute: 0),
-        BusTime(hour: 23, minute: 50),
-    ]
+    /// 都０５－２の実際の値を模したもの（休日は 07:01 始発、平日は 06:50 始発）。
+    private let timetable = ParsedTimetable(
+        tables: [
+            "平日": [BusTime(hour: 6, minute: 50), BusTime(hour: 7, minute: 2), BusTime(hour: 20, minute: 0)],
+            "土曜": [BusTime(hour: 6, minute: 30), BusTime(hour: 20, minute: 30)],
+            "休日": [BusTime(hour: 7, minute: 1), BusTime(hour: 7, minute: 16), BusTime(hour: 21, minute: 0)],
+        ],
+        todayKind: "休日"
+    )
 
-    /// 現在時刻より後の便だけを、時刻順に返す。
-    func testReturnsOnlyRemainingBusesToday() {
-        let now = date(8, 15, 10, 0)
-        let result = BusTime.upcoming(from: timetable, now: now)
-        XCTAssertEqual(result, [date(8, 15, 12, 0), date(8, 15, 23, 50)])
+    // MARK: - 本日分が残っている場合
+
+    func testReturnsRemainingTimesOfTodayKind() {
+        // 2026-08-16 は日曜。ページの申告どおり休日ダイヤ。
+        let result = timetable.upcoming(now: date(8, 16, 7, 5))
+        XCTAssertEqual(result.dates, [date(8, 16, 7, 16), date(8, 16, 21, 0)])
+        XCTAssertEqual(result.kind, "休日")
+        XCTAssertFalse(result.isNextDay)
     }
 
-    /// 本日分が尽きていれば翌日分に切り替える（深夜に見たとき空にならないように）。
-    func testFallsBackToTomorrowWhenTodayIsExhausted() {
-        let now = date(8, 15, 23, 55)
-        let result = BusTime.upcoming(from: timetable, now: now)
-        XCTAssertEqual(result, [date(8, 16, 6, 40), date(8, 16, 12, 0), date(8, 16, 23, 50)])
-    }
-
-    /// 月をまたぐ場合も翌日として扱えること。
-    func testFallsBackAcrossMonthBoundary() {
-        let now = date(8, 31, 23, 55)
-        let result = BusTime.upcoming(from: timetable, now: now)
-        XCTAssertEqual(result.first, date(9, 1, 6, 40))
-    }
-
-    /// ちょうど同時刻の便は「これから来る」に含めない（既に発車しているため）。
     func testExcludesBusAtExactlyNow() {
-        let now = date(8, 15, 12, 0)
-        let result = BusTime.upcoming(from: timetable, now: now)
-        XCTAssertEqual(result, [date(8, 15, 23, 50)])
+        let result = timetable.upcoming(now: date(8, 16, 7, 16))
+        XCTAssertEqual(result.dates, [date(8, 16, 21, 0)], "同時刻の便は既に発車している")
     }
 
-    /// 深夜便は24時を超える表記（25:10 など）で返るため、翌日へ繰り上げる。
+    // MARK: - 本日分が尽きた場合（翌日のダイヤ区分に切り替える）
+
+    /// 日曜の夜に見たら、翌日は月曜なので**平日ダイヤ**の始発を出す。
+    /// 休日ダイヤの 07:01 をそのまま出すのが以前のバグだった。
+    func testSwitchesToNextDayKindWhenTodayIsExhausted() {
+        let result = timetable.upcoming(now: date(8, 16, 21, 30))
+        XCTAssertEqual(result.kind, "平日")
+        XCTAssertTrue(result.isNextDay)
+        XCTAssertEqual(result.dates.first, date(8, 17, 6, 50), "月曜の始発は平日ダイヤの 06:50")
+        XCTAssertNotEqual(result.dates.first, date(8, 17, 7, 1), "休日ダイヤを使い回してはいけない")
+    }
+
+    /// 金曜の夜なら翌日は土曜ダイヤ。
+    func testUsesSaturdayKindOnFridayNight() {
+        let result = timetable.upcoming(now: date(8, 14, 23, 30))
+        XCTAssertEqual(result.kind, "土曜")
+        XCTAssertEqual(result.dates.first, date(8, 15, 6, 30))
+    }
+
+    /// 土曜の夜なら翌日は休日ダイヤ。
+    func testUsesHolidayKindOnSaturdayNight() {
+        let result = timetable.upcoming(now: date(8, 15, 23, 30))
+        XCTAssertEqual(result.kind, "休日")
+        XCTAssertEqual(result.dates.first, date(8, 16, 7, 1))
+    }
+
+    /// 月をまたぐ場合も翌日として扱う。
+    func testCrossesMonthBoundary() {
+        let result = timetable.upcoming(now: date(8, 31, 23, 30)) // 月曜の夜 → 火曜
+        XCTAssertEqual(result.dates.first, date(9, 1, 6, 50))
+    }
+
+    func testReturnsEmptyWhenNoTables() {
+        let result = ParsedTimetable.empty.upcoming(now: date(8, 16, 12, 0))
+        XCTAssertTrue(result.dates.isEmpty)
+    }
+
+    // MARK: - 深夜便
+
+    /// 24時を超える表記（25:10）は翌日の 01:10 として扱う。
     func testHandlesAfterMidnightNotation() {
-        let lateNight = [BusTime(hour: 25, minute: 10)]
-        let result = BusTime.upcoming(from: lateNight, now: date(8, 15, 20, 0))
-        XCTAssertEqual(result, [date(8, 16, 1, 10)], "25:10 は翌日の 01:10")
+        let lateNight = ParsedTimetable(tables: ["休日": [BusTime(hour: 25, minute: 10)]], todayKind: "休日")
+        let result = lateNight.upcoming(now: date(8, 16, 20, 0))
+        XCTAssertEqual(result.dates, [date(8, 17, 1, 10)])
+        XCTAssertFalse(result.isNextDay, "本日のダイヤの便なので翌日扱いにはしない")
+    }
+}
+
+/// ダイヤ区分の推定と見出し。
+final class ScheduleKindTests: XCTestCase {
+
+    private func date(_ month: Int, _ day: Int) -> Date {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TobusConfig.timeZone
+        var c = DateComponents()
+        (c.year, c.month, c.day, c.hour) = (2026, month, day, 12)
+        return calendar.date(from: c)!
     }
 
-    func testReturnsEmptyForEmptyTimetable() {
-        XCTAssertEqual(BusTime.upcoming(from: [], now: date(8, 15, 10, 0)), [])
+    func testEstimatesKindFromWeekday() {
+        XCTAssertEqual(TobusConfig.estimatedScheduleKind(on: date(8, 17)), "平日", "月曜")
+        XCTAssertEqual(TobusConfig.estimatedScheduleKind(on: date(8, 21)), "平日", "金曜")
+        XCTAssertEqual(TobusConfig.estimatedScheduleKind(on: date(8, 22)), "土曜")
+        XCTAssertEqual(TobusConfig.estimatedScheduleKind(on: date(8, 23)), "休日", "日曜")
+    }
+
+    /// 本日分は tobus.jp の申告どおり、翌日分は推定と分かる見出しにする。
+    func testHeadingDistinguishesNextDay() {
+        XCTAssertEqual(TobusConfig.scheduleHeading(kind: "休日"), "定刻（休日ダイヤ）")
+        XCTAssertEqual(TobusConfig.scheduleHeading(kind: "平日", isNextDay: true), "翌 平日ダイヤ")
+        XCTAssertEqual(TobusConfig.scheduleHeading(kind: nil), "定刻")
+        XCTAssertEqual(TobusConfig.scheduleHeading(kind: "", isNextDay: true), "翌日の定刻")
     }
 }

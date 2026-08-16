@@ -30,6 +30,24 @@ enum BusAPI {
     static let host = "tobus.jp"
     static let path = "/blsys/navi"
 
+    /// **Cookieを保持しない専用セッション。`URLSession.shared` を使ってはいけない。**
+    ///
+    /// tobus.jp は応答に `JSESSIONID` を付けてくる。`URLSession.shared` は Cookie を自動で
+    /// 保存・送信するため、以降の全リクエストが同一セッションに乗る。時刻表は
+    /// 「行き先選択」→「時刻表本体」の2段階で、サーバー側がセッションに選択状態を持つため、
+    /// **複数系統を並行して取ると互いの選択を上書きし合い、別系統の時刻表が返る**
+    /// （2026-08-16に都０３・都０５－１・都０５－２で再現。詳細は CLAUDE.md）。
+    ///
+    /// Cookieを送らなければリクエストごとに独立したセッションになり、この競合は起きない。
+    private static let session: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.httpCookieStorage = nil
+        configuration.httpShouldSetCookies = false
+        configuration.httpCookieAcceptPolicy = .never
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        return URLSession(configuration: configuration)
+    }()
+
     static func url(query: [String: String]) -> URL? {
         var components = URLComponents()
         components.scheme = "https"
@@ -47,7 +65,7 @@ enum BusAPI {
         request.cachePolicy = .reloadIgnoringLocalCacheData
         busLogger.debug("API request: \(query.description, privacy: .public)")
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await session.data(for: request)
             if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
                 throw BusAPIError.httpStatus(http.statusCode)
             }

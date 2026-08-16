@@ -39,6 +39,7 @@ final class ArrivalModel: ObservableObject {
             approach = nil
             scheduled = []
             scheduleKind = nil
+            scheduleIsNextDay = false
             errorText = nil
             selectionGeneration += 1
             if let stop = selectedStop {
@@ -61,6 +62,8 @@ final class ArrivalModel: ObservableObject {
     @Published var scheduled: [Date] = []
     /// `scheduled` がどのダイヤ区分のものか（`平日` / `土曜` / `休日`）。判別できなければ nil。
     @Published var scheduleKind: String?
+    /// `scheduled` が翌日分か（本日分が尽きたとき）。
+    @Published var scheduleIsNextDay = false
     @Published var errorText: String?
     /// 一時停止中は定期取得を行わない。設定は次回起動にも引き継ぐ。
     @Published private(set) var isPaused: Bool
@@ -249,8 +252,10 @@ final class ArrivalModel: ObservableObject {
             if let timetable = try? await BusScheduleService.fetchTimetable(for: route) {
                 AppSettings.saveSchedule(timetable, routeID: route.id)
                 guard isCurrent() else { return }
-                scheduled = BusTime.upcoming(from: timetable.times)
-                scheduleKind = timetable.scheduleKind
+                let upcoming = timetable.upcoming()
+                scheduled = upcoming.dates
+                scheduleKind = upcoming.kind
+                scheduleIsNextDay = upcoming.isNextDay
             }
         }
 
@@ -450,7 +455,7 @@ struct MenuContent: View {
     private var scheduleRow: some View {
         if !model.scheduled.isEmpty {
             VStack(alignment: .leading, spacing: 4) {
-                Text(TobusConfig.scheduleHeading(kind: model.scheduleKind))
+                Text(TobusConfig.scheduleHeading(kind: model.scheduleKind, isNextDay: model.scheduleIsNextDay))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 HStack(spacing: 10) {

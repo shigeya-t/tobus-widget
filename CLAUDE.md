@@ -93,8 +93,21 @@ xcodebuild -project TobusWidget.xcodeproj -scheme TobusWidget \
 
 - パース処理は `Shared/TobusPageParser.swift`（SwiftSoup使用）に集約している。
   tobus.jp側のHTML構造が変わった場合はここだけを見直せばよい
-- ステートレスなGETで `JSESSIONID` の継続は不要（2026-08-14に `curl` で無Cookie検証済み）。
-  サーバー側60秒 / アプリ内 `TobusPageService` 50秒のキャッシュ段構成
+- **`URLSession.shared` を使ってはいけない。`JSESSIONID` を持ち回ると時刻表が壊れる。**
+  応答に `JSESSIONID` が付くため、Cookieを自動保存する `URLSession.shared` だと全リクエストが
+  同一セッションに乗る。時刻表は「行き先選択」→「時刻表本体」の2段階で、サーバーが
+  セッションに選択状態を持つため、**複数系統を並行取得すると互いの選択を上書きし合い、
+  別系統の時刻表が返る**。`BusAPI` は Cookie を保持しない専用セッションを使っている。
+
+  2026-08-16に実際に踏んだ症状: 都０３・都０５－１・都０５－２（いずれも同じのりば）の定刻が
+  すべて都０５－１のものになっていた。**エラーは出ず、値がもっともらしいので気づきにくい。**
+  疑ったら `curl` で切り分ける（Cookieを共有した並行リクエストだけが誤る）。
+
+  ```sh
+  # 正しい: Cookieを送らない並行リクエスト → それぞれ正しい系統が返る
+  for r in 23 184 181; do ( curl -s "https://tobus.jp/blsys/navi?VCD=cresultttbl&ECD=show&RTMCD=$r&slst=325&bs=325&pl=1&lrid=2&tgo=2" | grep -o '<title>[^ ]*' ) & done; wait
+  ```
+- サーバー側60秒 / アプリ内 `TobusPageService` 50秒のキャッシュ段構成
 - 定刻（`Shared/BusScheduleService.swift`）は原則「行き先選択」ページ→「時刻表本体」ページの
   2段階フェッチだが、**行き先が1つしかない系統では1段階目で時刻表そのものが返る**。
   この場合ページに `func_stoppole` が無く `parseStoppoleParams` が nil になるので、
@@ -124,6 +137,16 @@ xcodebuild -project TobusWidget.xcodeproj -scheme TobusWidget \
 
   お盆の週で、多くの系統が土曜でも休日ダイヤで運行していたため。
   「土曜なら土曜ダイヤ」でも「お盆は一律休日ダイヤ」でも間違いになる
+- **翌日分だけは曜日から推定している。本日の区分にこれを流用しないこと。**
+  本日分の定刻が尽きたあと、翌日の始発を出すために平日・土曜・休日の3表すべてを
+  保持している（時刻表ページには元から3つとも入っているので追加の通信は不要）。
+  翌日どの区分になるかはページからは分からないので `TobusConfig.estimatedScheduleKind(on:)`
+  が曜日から推定するが、上記のとおり外れうる。そのため見出しを
+  「定刻（休日ダイヤ）」→「翌 平日ダイヤ」と切り替え、**推定値だと画面で分かるようにしている**。
+
+  ここを手抜きして「今日の表をそのまま翌日に使う」とどうなるかは実際に踏んだ:
+  日曜の夜に月曜の始発が休日ダイヤの 07:01 と表示されていた（正しくは平日ダイヤの 06:50）。
+  `TimetableSelectionTests` がこの切り替えを固定している
 
 ## 開発中に踏んだ既知の落とし穴（SwiftUI / WidgetKit / AppIntents）
 

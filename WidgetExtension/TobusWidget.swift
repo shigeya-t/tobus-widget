@@ -19,6 +19,8 @@ struct BusEntry: TimelineEntry {
     let scheduled: [Date]
     /// `scheduled` がどのダイヤ区分のものか（`平日` / `土曜` / `休日`）。判別できなければ nil。
     let scheduleKind: String?
+    /// `scheduled` が翌日分か（本日分が尽きたとき）。区分は推定なので見出しで明示する。
+    let scheduleIsNextDay: Bool
     /// 一時停止中は通信せず、最後に取得した値をそのまま表示する
     let isPaused: Bool
 
@@ -50,7 +52,7 @@ struct BusEntry: TimelineEntry {
     }
 
     static func placeholder(_ date: Date = Date()) -> BusEntry {
-        BusEntry(date: date, routeID: nil, routeDisplayName: nil, routeLabel: nil, routeDestination: nil, stopName: nil, approach: nil, scheduled: [], scheduleKind: nil, isPaused: false)
+        BusEntry(date: date, routeID: nil, routeDisplayName: nil, routeLabel: nil, routeDestination: nil, stopName: nil, approach: nil, scheduled: [], scheduleKind: nil, scheduleIsNextDay: false, isPaused: false)
     }
 }
 
@@ -107,6 +109,7 @@ struct Provider: AppIntentTimelineProvider {
     private func buildEntry(configuration: SelectBusStopIntent, now: Date) -> BusEntry {
         let routeID = configuration.route?.id
         let routeName = configuration.route?.name
+        let schedule = routeID.flatMap { AppSettings.schedule(routeID: $0) }?.upcoming(now: now)
         return BusEntry(
             date: now,
             routeID: routeID,
@@ -115,8 +118,9 @@ struct Provider: AppIntentTimelineProvider {
             routeDestination: Self.dropFirstWord(of: routeName),
             stopName: configuration.stop?.name,
             approach: routeID.flatMap { AppSettings.snapshot(routeID: $0) },
-            scheduled: routeID.map { Self.upcomingDates(routeID: $0, now: now) } ?? [],
-            scheduleKind: routeID.flatMap { AppSettings.scheduleKind(routeID: $0) },
+            scheduled: schedule?.dates ?? [],
+            scheduleKind: schedule?.kind,
+            scheduleIsNextDay: schedule?.isNextDay ?? false,
             isPaused: AppSettings.isPaused
         )
     }
@@ -135,12 +139,6 @@ struct Provider: AppIntentTimelineProvider {
         guard parts.count == 2 else { return nil }
         let rest = parts[1].trimmingCharacters(in: .whitespaces)
         return rest.isEmpty ? nil : rest
-    }
-
-    /// 保存済みの時刻表（時刻のみ）を、本日これから来る絶対時刻に変換する。本日分が尽きていれば翌日分。
-    private static func upcomingDates(routeID: String, now: Date) -> [Date] {
-        guard let times = AppSettings.schedule(routeID: routeID) else { return [] }
-        return BusTime.upcoming(from: times, now: now)
     }
 }
 
@@ -253,7 +251,7 @@ struct TobusWidgetEntryView: View {
     private var scheduleFooter: some View {
         if !entry.scheduled.isEmpty {
             VStack(alignment: .leading, spacing: 1) {
-                Text(TobusConfig.scheduleHeading(kind: entry.scheduleKind))
+                Text(TobusConfig.scheduleHeading(kind: entry.scheduleKind, isNextDay: entry.scheduleIsNextDay))
                     .font(Self.footnoteFont)
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)
