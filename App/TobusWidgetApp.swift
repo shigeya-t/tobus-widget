@@ -61,6 +61,13 @@ final class ArrivalModel: ObservableObject {
     @Published var selectedRoute: RouteBlock? {
         didSet {
             guard selectedRoute != oldValue else { return }
+            // 系統が変わったら定刻も捨てる。取得は非同期なうえ、読み取りに失敗した回は
+            // 「前回値を残す」扱いになるため、消さないと**前の系統の定刻が新しい系統の
+            // 接近情報の下に出続ける**（恒久的に読めないページなら消えない）。
+            // 停留所を変えたときと同じ扱いに揃える。
+            scheduled = []
+            scheduleKind = nil
+            scheduleIsNextDay = false
             saveSelection()
             selectionGeneration += 1
             Task { await refresh(generation: selectionGeneration) }
@@ -140,11 +147,20 @@ final class ArrivalModel: ObservableObject {
             busLogger.debug("performSearch: \(self.stopResults.count, privacy: .public) 件")
         } catch {
             guard generation == searchGeneration else { return }
+            // 入力のたびに前の検索がキャンセルされる（`.task(id:)`）。キャンセルは失敗ではないうえ、
+            // 後続タスクはデバウンス中でまだ世代を進めていないため上の world チェックを素通りする。
+            // ここで弾かないと、打鍵のたびに誤ったエラーが一瞬表示される。
+            guard !Self.isCancellation(error) else { return }
             busLogger.error("performSearch failed: \(String(describing: error), privacy: .public)")
             stopResults = []
             // 黙って空にすると「ヒットなし」と区別がつかず、通信断に気づけない。
             searchHint = "検索できませんでした（\(error.localizedDescription)）"
         }
+    }
+
+    private static func isCancellation(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        return (error as? URLError)?.code == .cancelled
     }
 
     private func observePauseChangesFromWidget() {

@@ -90,9 +90,10 @@ final class TimetableParsingTests: XCTestCase {
         XCTAssertTrue(parsed.upcoming(now: Date()).dates.isEmpty)
     }
 
-    /// 空の結果で保存済みの定刻を上書きしないこと。
-    /// 取得に失敗した回に空を書くと、次に取り直せるまで定刻が消える。
-    func testSaveScheduleKeepsPreviousValueWhenNewOneIsEmpty() throws {
+    /// 空が渡るのは「その系統に時刻表が無い」ときだけなので、保存済みの値は**削除する**。
+    /// 残すと、時刻表リンクを失った系統の古い表が消えず、別の日のダイヤとして表示され続ける。
+    /// 取得の失敗は `BusScheduleError` として投げられ、ここまで来ない（呼び出し側が前回値を保つ）。
+    func testSaveScheduleRemovesStoredValueWhenTimetableIsEmpty() throws {
         let routeID = "test-\(UUID().uuidString)"
         addTeardownBlock { UserDefaults.standard.removeObject(forKey: "schedule.\(routeID)") }
 
@@ -101,9 +102,9 @@ final class TimetableParsingTests: XCTestCase {
         XCTAssertEqual(AppSettings.schedule(routeID: routeID), good)
 
         AppSettings.saveSchedule(.empty, routeID: routeID)
-        XCTAssertEqual(
-            AppSettings.schedule(routeID: routeID), good,
-            "空で上書きせず、前回の値を残す"
+        XCTAssertNil(
+            AppSettings.schedule(routeID: routeID),
+            "時刻表が無い系統の古い値は残さない"
         )
     }
 

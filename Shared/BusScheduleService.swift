@@ -1,10 +1,5 @@
 import Foundation
 
-/// 静的時刻表（「定刻」）の取得。
-///
-/// 車両接近情報ページ内の「時刻表」リンクを2段階たどって取得する
-/// （行き先選択ページ → 実際の時刻表ページ）。時刻表は日をまたがない限り変わらないため、
-/// 系統ごとに1日1回だけ取得すれば十分。
 /// 時刻表として読み取れなかった（HTTP 200 で返るエラーページなど）。
 /// 「その系統に時刻表が無い」（`ParsedTimetable.empty`）とは区別する。前者は前回値を残すべきで、
 /// 後者は本当に空なので表示を消すべきという、逆の扱いになるため。
@@ -19,6 +14,11 @@ enum BusScheduleError: LocalizedError {
     }
 }
 
+/// 静的時刻表（「定刻」）の取得。
+///
+/// 車両接近情報ページ内の「時刻表」リンクを2段階たどって取得する
+/// （行き先選択ページ → 実際の時刻表ページ）。時刻表は日をまたがない限り変わらないため、
+/// 系統ごとに1日1回だけ取得すれば十分。
 enum BusScheduleService {
     private static let cache = ScheduleCache()
 
@@ -33,6 +33,13 @@ enum BusScheduleService {
 
         let key = "\(route.slst):\(pl):\(rtmcd)"
         if let cached = await cache.value(for: key) { return cached }
+
+        // 読み取りに失敗した直後は間を空ける。失敗はキャッシュに載らないため、
+        // これが無いと 60 秒ごとの取得サイクルのたびに 1〜2 リクエストを投げ続けることになる
+        // （tobus.jp のHTML構造が変わった場合＝このエラーが想定する状況で、公開サイトを叩き続ける）。
+        guard await cache.shouldRetry(key) else {
+            throw BusScheduleError.unreadableTimetable(slst: route.slst, pl: pl, rtmcd: rtmcd)
+        }
 
         let selectHTML = try await BusAPI.destinationSelectHTML(slst: route.slst, pl: pl, rtmcd: rtmcd)
         guard let params = TobusPageParser.parseStoppoleParams(html: selectHTML) else {
@@ -65,6 +72,7 @@ enum BusScheduleService {
     ) async throws -> ParsedTimetable {
         guard !parsed.tables.isEmpty else {
             busLogger.error("時刻表を読み取れません（slst=\(slst, privacy: .public), pl=\(pl, privacy: .public), RTMCD=\(rtmcd, privacy: .public)）")
+            await cache.recordFailure(key)
             throw BusScheduleError.unreadableTimetable(slst: slst, pl: pl, rtmcd: rtmcd)
         }
         await cache.store(parsed, for: key)
@@ -88,5 +96,20 @@ private actor ScheduleCache {
 
     func store(_ timetable: ParsedTimetable, for key: String) {
         entries[key] = (timetable, today)
+        failures.removeValue(forKey: key)
+    }
+
+    /// 読み取り失敗の記録。成功した結果と違って当日ずっと持ち続けるのではなく、
+    /// 短い間隔で再試行できるようにする（先方が直せば自然に復旧してほしいため）。
+    private var failures: [String: Date] = [:]
+    private let retryInterval: TimeInterval = 10 * 60
+
+    func shouldRetry(_ key: String, now: Date = Date()) -> Bool {
+        guard let failedAt = failures[key] else { return true }
+        return now.timeIntervalSince(failedAt) >= retryInterval
+    }
+
+    func recordFailure(_ key: String) {
+        failures[key] = Date()
     }
 }

@@ -182,10 +182,16 @@ enum AppSettings {
     ///
     /// 平日・土曜・休日の3区分をまとめて保存する。翌日の始発を前夜に出すには、
     /// 本日とは別の区分の表が要るため（`ParsedTimetable.upcoming` 参照）。
-    /// 空の結果で既存の保存を上書きしない。取得に失敗した回（HTTP 200 で返るエラーページなど）に
-    /// 空を書いてしまうと、次に取り直せるまで定刻が消える。前回の値を残す方が実害が小さい。
+    /// 空が渡るのは「その系統に時刻表が無い」ときだけ（取得の失敗は
+    /// `BusScheduleError` として投げられ、ここまで来ない）。**そのときは削除する。**
+    /// 残すと、時刻表リンクを失った系統の古い表が消えずに残り、`upcoming(now:)` が
+    /// それを今日の日付へ投影してしまう（土曜に保存した表を月曜に
+    /// 「定刻（土曜ダイヤ）」として出す、といったことが起きる）。
     static func saveSchedule(_ timetable: ParsedTimetable, routeID: String) {
-        guard !timetable.tables.isEmpty else { return }
+        guard !timetable.tables.isEmpty else {
+            defaults.removeObject(forKey: Keys.schedule(routeID))
+            return
+        }
         guard let data = try? JSONEncoder().encode(timetable) else { return }
         defaults.set(data, forKey: Keys.schedule(routeID))
     }
