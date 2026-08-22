@@ -91,8 +91,13 @@ xcodebuild -project TobusWidget.xcodeproj -scheme TobusWidget \
 エンドポイント一覧・仕様・利用条件は README「データソースについて」にある。ここには
 **コードを触るときに効く注意点だけ**を書く。
 
-- パース処理は `Shared/TobusPageParser.swift`（SwiftSoup使用）に集約している。
+-   パース処理は `Shared/TobusPageParser.swift`（SwiftSoup使用）に集約している。
   tobus.jp側のHTML構造が変わった場合はここだけを見直せばよい
+- **「運休」を含むだけでは運休日と判定しないこと。** 地震などの注意テロップに
+  「運休が発生する場合があります」と入ることがあり、親要素全体の `.text()` から
+  `contains("運休")` すると、運行中の系統まで「本日は運休日です」になる。
+  本物の運休は表の直後の「本日は運休日です。」（`parent.ownText()`）だけを見る。
+  `DisruptionNoticeParsingTests` がこの取り違えを固定している
 - **`URLSession.shared` を使ってはいけない。`JSESSIONID` を持ち回ると時刻表が壊れる。**
   応答に `JSESSIONID` が付くため、Cookieを自動保存する `URLSession.shared` だと全リクエストが
   同一セッションに乗る。時刻表は「行き先選択」→「時刻表本体」の2段階で、サーバーが

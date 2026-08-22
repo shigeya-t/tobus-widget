@@ -108,6 +108,27 @@ final class TobusPageParserTests: XCTestCase {
         XCTAssertNotNil(components.hour)
         XCTAssertNotNil(components.minute)
     }
+
+    /// 表の直後に「本日は運休日です。」とある系統は、接近なしではなく運休として出す。
+    func testTreatsSiblingUnserviceTextAsSuspended() throws {
+        let block = try XCTUnwrap(try parsedPage().blocks.first { $0.label == "都０５－１出入" })
+        XCTAssertEqual(block.statusText, "本日は運休日です。")
+        XCTAssertNil(block.estimatedMinutes)
+        XCTAssertEqual(
+            BusApproachKind(statusText: block.statusText, estimatedMinutes: block.estimatedMinutes),
+            .suspended
+        )
+    }
+
+    /// 土曜ダイヤのテロップは運休にしない。親要素全体に「運休」が無くてもダイヤ注記は残す。
+    func testKeepsSaturdayScheduleNote() throws {
+        let block = try XCTUnwrap(try parsedPage().blocks.first { $0.label == "都０３" })
+        XCTAssertEqual(block.noteText, "本日は土曜ダイヤで運行しています。")
+        XCTAssertNotEqual(
+            BusApproachKind(statusText: block.statusText, estimatedMinutes: block.estimatedMinutes),
+            .suspended
+        )
+    }
 }
 
 /// 文言から状態への分類。tobus.jp の定型文が変わると表示が崩れるため固定しておく。
@@ -151,6 +172,49 @@ final class BusApproachKindTests: XCTestCase {
         XCTAssertEqual(
             BusApproachKind(statusText: "ただいま定刻で運行しています。", estimatedMinutes: 3),
             .estimatedMinutes(3)
+        )
+    }
+
+    /// 「運休が発生する場合があります」は運休日ではない。`contains("運休")` だと誤る。
+    func testDisruptionWarningIsNotSuspended() {
+        XCTAssertEqual(
+            BusApproachKind(statusText: "運休が発生する場合があります。", estimatedMinutes: nil),
+            .other("運休が発生する場合があります。")
+        )
+    }
+}
+
+/// 地震などの「運休が発生する場合があります」を、運休日と取り違えないこと。
+///
+/// 2026-08-23 の実ページでは、運行中の系統の備考テロップにこの文言が入っており、
+/// 親要素全体のテキストから `contains("運休")` すると全系統が運休になっていた。
+final class DisruptionNoticeParsingTests: XCTestCase {
+
+    private func parsedPage() throws -> ParsedStopPage {
+        let url = try XCTUnwrap(
+            Bundle(for: Self.self).url(forResource: "stop_disruption_notice", withExtension: "html")
+        )
+        let html = try String(contentsOf: url, encoding: .utf8)
+        return try TobusPageParser.parseStopPage(html: html, slst: 325)
+    }
+
+    func testApproachingBusIsNotMarkedSuspended() throws {
+        let block = try XCTUnwrap(try parsedPage().blocks.first { $0.label == "都０５－１" })
+        XCTAssertEqual(block.estimatedMinutes, 8)
+        XCTAssertEqual(block.noteText, "運休が発生する場合があります")
+        XCTAssertEqual(
+            BusApproachKind(statusText: block.statusText, estimatedMinutes: block.estimatedMinutes),
+            .estimatedMinutes(8)
+        )
+    }
+
+    func testActualUnserviceDayStillSuspends() throws {
+        let block = try XCTUnwrap(try parsedPage().blocks.first { $0.label == "都０５－１出入" })
+        XCTAssertEqual(block.statusText, "本日は運休日です。")
+        XCTAssertNil(block.noteText, "運休状態のときは同じ意味の備考を重ねない")
+        XCTAssertEqual(
+            BusApproachKind(statusText: block.statusText, estimatedMinutes: block.estimatedMinutes),
+            .suspended
         )
     }
 }

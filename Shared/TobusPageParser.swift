@@ -122,8 +122,14 @@ enum TobusPageParser {
                 guard let table = try dl.nextElementSibling(), table.hasClass("appListTbl") else { continue }
 
                 let (statusText, estimatedMinutes, followingMinutes) = try Self.approachInfo(inTable: table)
-                let containerText = try table.parent()?.text() ?? ""
-                let noteText = Self.note(fromContainerText: containerText)
+                let (statusOverride, noteText) = Self.statusOverrideAndNote(fromParent: table.parent())
+                // 接近中の実車があるときは分数を優先する。運休の上書きは表が空のときだけ。
+                let resolvedStatus: String
+                if estimatedMinutes == nil, statusText.isEmpty, let statusOverride {
+                    resolvedStatus = statusOverride
+                } else {
+                    resolvedStatus = statusText
+                }
                 let (timetableRTMCD, timetablePl) = Self.timetableLinkParams(dl: dl)
 
                 blocks.append(ParsedBlock(
@@ -131,7 +137,7 @@ enum TobusPageParser {
                     platformLabel: platformLabel,
                     label: label,
                     destination: destination,
-                    statusText: statusText,
+                    statusText: resolvedStatus,
                     estimatedMinutes: estimatedMinutes,
                     followingMinutes: followingMinutes,
                     noteText: noteText,
@@ -213,11 +219,44 @@ enum TobusPageParser {
         return calendar.date(from: components) ?? now
     }
 
-    private static func note(fromContainerText text: String) -> String? {
-        if text.contains("運休") { return "本日は運休日です。" }
-        if text.contains("土曜ダイヤ") { return "本日は土曜ダイヤで運行しています。" }
-        if text.contains("休日ダイヤ") { return "本日は休日ダイヤで運行しています。" }
-        return nil
+    /// 系統ブロックの表の外にある注記を取る。
+    ///
+    /// tobus.jp は「本日は運休日です。」を `td.stopNotes` ではなく、表の直後のテキストとして
+    /// 置くことがある。一方、地震などの注意は同じ親の `dl.appNotes` テロップに入る。
+    /// 親要素全体の `.text()` を見ると、テロップの「運休が発生する場合があります」まで
+    /// 「本日は運休日です。」に潰してしまう（2026-08-23 に実ページで確認）。
+    private static func statusOverrideAndNote(
+        fromParent parent: Element?
+    ) -> (statusOverride: String?, noteText: String?) {
+        guard let parent else { return (nil, nil) }
+
+        let isSuspended = parent.ownText().contains("本日は運休日")
+        var scheduleNote: String?
+        var disruptionNote: String?
+
+        let items = (try? parent.select("dl.appNotes li").array()) ?? []
+        for li in items {
+            let text = (try? li.text()) ?? ""
+            if text.contains("本日は運休日") {
+                continue
+            } else if text.contains("土曜ダイヤ") {
+                scheduleNote = "本日は土曜ダイヤで運行しています。"
+            } else if text.contains("休日ダイヤ") {
+                scheduleNote = "本日は休日ダイヤで運行しています。"
+            } else if text.contains("運休が発生する場合") {
+                disruptionNote = "運休が発生する場合があります"
+            }
+        }
+
+        // 本物の運休は状態として出す。備考の「運休が発生する場合」を運休日にしない。
+        let noteText: String?
+        if isSuspended {
+            noteText = nil
+        } else {
+            noteText = disruptionNote ?? scheduleNote
+        }
+        let statusOverride = isSuspended ? "本日は運休日です。" : nil
+        return (statusOverride, noteText)
     }
 
     /// `dd.linkBtn` 内の「時刻表」リンク（`navi?...VCD=SelectDest&...&slst=325&pl=1&RTMCD=23`）から

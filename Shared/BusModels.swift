@@ -114,7 +114,7 @@ enum BusApproachKind: Equatable {
     init(statusText: String, estimatedMinutes: Int?) {
         if let estimatedMinutes {
             self = .estimatedMinutes(estimatedMinutes)
-        } else if statusText.contains("運休") {
+        } else if statusText.contains("運休日") {
             self = .suspended
         } else if statusText.contains("以内に発車") {
             self = .departingSoon
