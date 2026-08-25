@@ -65,7 +65,7 @@ final class TimetableParsingTests: XCTestCase {
         )
         XCTAssertEqual(
             parsed.legend.map(\.caption),
-            ["無印 新橋行", "ﾛ 銀座六丁目経由新橋行"],
+            ["【無印】新橋行", "【ﾛ】銀座六丁目経由新橋行"],
             "ページの記号説明を凡例として保持する"
         )
     }
@@ -160,7 +160,7 @@ final class TimetableParsingTests: XCTestCase {
         XCTAssertEqual(upcoming.departures[0].mark, "ｱ")
         XCTAssertEqual(
             parsed.legend(appearingIn: upcoming.departures).map(\.caption),
-            ["ｱ 有明一丁目行"],
+            ["【ｱ】有明一丁目行"],
             "残っている便の記号だけを凡例として出す"
         )
     }
