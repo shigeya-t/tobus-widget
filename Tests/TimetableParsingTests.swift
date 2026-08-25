@@ -51,13 +51,23 @@ final class TimetableParsingTests: XCTestCase {
     /// その同じHTMLは、時刻表としてはそのまま読める。
     /// `BusScheduleService` はこれを頼りにフォールバックしている。
     func testSameHTMLParsesDirectlyAsTimetable() throws {
-        let times = try TobusPageParser.parseTimetable(html: try fixture("timetable_direct_gyo10")).todayTimes
+        let parsed = try TobusPageParser.parseTimetable(html: try fixture("timetable_direct_gyo10"))
+        let times = parsed.todayTimes
         XCTAssertFalse(times.isEmpty, "業１０の定刻が取れていない")
         XCTAssertEqual(times, times.sorted(), "時刻順に並んでいる")
 
         let hours = Set(times.map(\.hour))
         XCTAssertTrue(hours.allSatisfy { (0...29).contains($0) }, "時が範囲外: \(hours.sorted())")
         XCTAssertTrue(times.allSatisfy { (0...59).contains($0.minute) }, "分が範囲外")
+        XCTAssertTrue(
+            times.contains(BusTime(hour: 20, minute: 16, mark: "ﾛ")),
+            "行き先記号付き（ﾛ16）の便も読む。落とすと終バスが空になり翌日ダイヤへ誤切替する"
+        )
+        XCTAssertEqual(
+            parsed.legend.map(\.caption),
+            ["無印 新橋行", "ﾛ 銀座六丁目経由新橋行"],
+            "ページの記号説明を凡例として保持する"
+        )
     }
 
     /// ページ自身の「本日は〇曜ダイヤ」の申告に従って表を選ぶ（こちらで祝日判定はしない）。
@@ -106,6 +116,62 @@ final class TimetableParsingTests: XCTestCase {
             AppSettings.schedule(routeID: routeID),
             "時刻表が無い系統の古い値は残さない"
         )
+    }
+
+    /// 行き先記号付きの分（都０５－２の「ｱ06」＝有明一丁目行など）も定刻として数える。
+    /// `Int("ｱ06")` は nil なので、これを落とすと 22〜23 時台が空になり、
+    /// 本日分が残っているのに翌日ダイヤへ切り替わる。
+    func testReadsMinutesPrefixedWithDestinationMark() throws {
+        let html = """
+        <dl><dt class="icon4">記号説明</dt><dd><ul>
+          <li>【無印】　東京ビッグサイト行</li>
+          <li>【ｱ】　有明一丁目行</li>
+        </ul></dd></dl>
+        <p>本日は、<a onclick="document.getElementById('平日').scrollIntoView();">平日ダイヤ</a>で運行しております。</p>
+        <table id="平日">
+          <tr><th>20</th><td><span></span>51</td></tr>
+          <tr><th>22</th><td><span>ｱ</span>06</td><td><span>ｱ</span>21</td><td><span>ｱ</span>41</td></tr>
+          <tr><th>23</th><td><span>ｱ</span>06</td></tr>
+        </table>
+        """
+        let parsed = try TobusPageParser.parseTimetable(html: html)
+        XCTAssertEqual(parsed.todayTimes, [
+            BusTime(hour: 20, minute: 51),
+            BusTime(hour: 22, minute: 6, mark: "ｱ"),
+            BusTime(hour: 22, minute: 21, mark: "ｱ"),
+            BusTime(hour: 22, minute: 41, mark: "ｱ"),
+            BusTime(hour: 23, minute: 6, mark: "ｱ"),
+        ])
+        XCTAssertEqual(
+            parsed.legend,
+            [TimetableMark(symbol: "", label: "東京ビッグサイト行"), TimetableMark(symbol: "ｱ", label: "有明一丁目行")]
+        )
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TobusConfig.timeZone
+        var c = DateComponents()
+        (c.year, c.month, c.day, c.hour, c.minute) = (2026, 8, 25, 22, 9)
+        let now = calendar.date(from: c)!
+        let upcoming = parsed.upcoming(now: now)
+        XCTAssertFalse(upcoming.isNextDay, "22時台が残っているのに翌日へ切り替えてはいけない")
+        XCTAssertEqual(upcoming.kind, "平日")
+        XCTAssertEqual(calendar.component(.hour, from: upcoming.dates[0]), 22)
+        XCTAssertEqual(calendar.component(.minute, from: upcoming.dates[0]), 21)
+        XCTAssertEqual(upcoming.departures[0].mark, "ｱ")
+        XCTAssertEqual(
+            parsed.legend(appearingIn: upcoming.departures).map(\.caption),
+            ["ｱ 有明一丁目行"],
+            "残っている便の記号だけを凡例として出す"
+        )
+    }
+
+    /// 記号・凡例を足す前に保存したJSONも読める（再取得までの間、定刻が消えないように）。
+    func testDecodesScheduleSavedBeforeLegendAndMarks() throws {
+        let json = #"{"tables":{"平日":[{"hour":6,"minute":50}]},"todayKind":"平日"}"#
+        let parsed = try JSONDecoder().decode(ParsedTimetable.self, from: Data(json.utf8))
+        XCTAssertEqual(parsed.legend, [])
+        XCTAssertEqual(parsed.todayTimes, [BusTime(hour: 6, minute: 50)])
+        XCTAssertNil(parsed.todayTimes.first?.mark)
     }
 
     /// 見出しはダイヤ区分が分かるときだけ添える。

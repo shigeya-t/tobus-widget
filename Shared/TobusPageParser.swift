@@ -28,13 +28,29 @@ struct ParsedBlock {
 /// 本日どれを使うかはページ自身が申告してくるが（`todayKind`）、**翌日どれになるかは
 /// ページからは分からない**ため、翌日分を出すときは呼び出し側が区分を決めて選ぶ
 /// （[[TobusConfig]] の `estimatedScheduleKind(on:)`）。
-struct ParsedTimetable: Codable, Equatable {
+struct UpcomingSchedule: Equatable {
+    let departures: [ScheduledDeparture]
+    let kind: String?
+    let isNextDay: Bool
+
+    var dates: [Date] { departures.map(\.date) }
+}
+
+struct ParsedTimetable: Equatable {
     /// ダイヤ区分（`平日` / `土曜` / `休日`）ごとの時刻表。
     let tables: [String: [BusTime]]
     /// ページが「本日は〇曜ダイヤで運行しております」と申告している区分。読み取れなければ nil。
     let todayKind: String?
+    /// ページの「記号説明」。記号が無い系統では空。
+    let legend: [TimetableMark]
 
-    static let empty = ParsedTimetable(tables: [:], todayKind: nil)
+    static let empty = ParsedTimetable(tables: [:], todayKind: nil, legend: [])
+
+    init(tables: [String: [BusTime]], todayKind: String?, legend: [TimetableMark] = []) {
+        self.tables = tables
+        self.todayKind = todayKind
+        self.legend = legend
+    }
 
     /// 本日のダイヤ区分の時刻表。
     var todayTimes: [BusTime] {
@@ -53,19 +69,47 @@ struct ParsedTimetable: Codable, Equatable {
     /// **今日と同じ表を使い回してはいけない**（日曜→月曜のようにダイヤ区分が変わる）。
     /// 翌日の区分はページから分からないので曜日から推定し、推定であることを
     /// `isNextDay` と `kind` で呼び出し側に伝える（見出しに区分名を出して判断できるようにする）。
-    func upcoming(now: Date = Date()) -> (dates: [Date], kind: String?, isNextDay: Bool) {
-        let remaining = BusTime.dates(from: todayTimes, on: now, after: now)
+    func upcoming(now: Date = Date()) -> UpcomingSchedule {
+        let remaining = BusTime.departures(from: todayTimes, on: now, after: now)
         if !remaining.isEmpty {
-            return (remaining, todayKind, false)
+            return UpcomingSchedule(departures: remaining, kind: todayKind, isNextDay: false)
         }
 
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TobusConfig.timeZone
         guard let tomorrow = calendar.date(byAdding: .day, value: 1, to: now) else {
-            return ([], todayKind, false)
+            return UpcomingSchedule(departures: [], kind: todayKind, isNextDay: false)
         }
         let kind = TobusConfig.estimatedScheduleKind(on: tomorrow)
-        return (BusTime.dates(from: times(kind: kind), on: tomorrow), kind, true)
+        return UpcomingSchedule(
+            departures: BusTime.departures(from: times(kind: kind), on: tomorrow),
+            kind: kind,
+            isNextDay: true
+        )
+    }
+
+    /// 表示中の定刻に出てくる記号だけの凡例。ウィジェットなど幅が無い面向け。
+    func legend(appearingIn departures: [ScheduledDeparture]) -> [TimetableMark] {
+        let used = Set(departures.map { $0.mark ?? "" })
+        return legend.filter { used.contains($0.symbol) }
+    }
+}
+
+extension ParsedTimetable: Codable {
+    enum CodingKeys: String, CodingKey { case tables, todayKind, legend }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        tables = try c.decode([String: [BusTime]].self, forKey: .tables)
+        todayKind = try c.decodeIfPresent(String.self, forKey: .todayKind)
+        legend = try c.decodeIfPresent([TimetableMark].self, forKey: .legend) ?? []
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(tables, forKey: .tables)
+        try c.encodeIfPresent(todayKind, forKey: .todayKind)
+        if !legend.isEmpty { try c.encode(legend, forKey: .legend) }
     }
 }
 
@@ -318,7 +362,11 @@ enum TobusPageParser {
             tables[kind] = times
         }
 
-        return ParsedTimetable(tables: tables, todayKind: try todayScheduleTableId(doc: doc))
+        return ParsedTimetable(
+            tables: tables,
+            todayKind: try todayScheduleTableId(doc: doc),
+            legend: try parseLegend(doc: doc)
+        )
     }
 
     /// 時刻表の表として想定しているID。これ以外のテーブル（案内文の枠など）は読み飛ばす。
@@ -332,12 +380,55 @@ enum TobusPageParser {
                   let hour = Int(hourText.trimmingCharacters(in: .whitespaces))
             else { continue }
             for cell in try row.select("td").array() {
-                let text = try cell.text().trimmingCharacters(in: .whitespaces)
-                guard let minute = Int(text) else { continue }
-                times.append(BusTime(hour: hour, minute: minute))
+                guard let minute = minute(inTimetableCell: cell) else { continue }
+                times.append(BusTime(hour: hour, minute: minute, mark: destinationMark(in: cell)))
             }
         }
         return times.sorted()
+    }
+
+    /// 時刻セルから分を取り出す。
+    ///
+    /// 行き先記号が付く便は `<td><span>ｱ</span>06</td>` となり、`text()` は「ｱ06」。
+    /// これを `Int` にすると nil になり、終バスが記号付きの系統では夜に本日分が空になる。
+    /// 数字だけを拾えば無印（`<span></span>51`）も記号付きも同じ扱いにできる。
+    private static func minute(inTimetableCell cell: Element) -> Int? {
+        let raw = (try? cell.text()) ?? cell.ownText()
+        let digits = raw.filter { $0.isASCII && $0.isNumber }
+        guard let minute = Int(digits), (0...59).contains(minute) else { return nil }
+        return minute
+    }
+
+    /// セル先頭の `<span>ｱ</span>` から行き先記号を取る。空の span（無印）は nil。
+    private static func destinationMark(in cell: Element) -> String? {
+        let text = (try? cell.select("span").first()?.text())?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return text.isEmpty ? nil : text
+    }
+
+    /// 「記号説明」の `【ｱ】　有明一丁目行` を凡例として取り出す。
+    private static func parseLegend(doc: Document) throws -> [TimetableMark] {
+        var entries: [TimetableMark] = []
+        for dt in try doc.select("dt.icon4").array() {
+            guard try dt.text().contains("記号説明") else { continue }
+            let items = try dt.parent()?.select("dd li").array() ?? []
+            for li in items {
+                let text = try li.text().trimmingCharacters(in: .whitespacesAndNewlines)
+                guard let entry = legendEntry(from: text) else { continue }
+                entries.append(entry)
+            }
+            break
+        }
+        return entries
+    }
+
+    private static func legendEntry(from text: String) -> TimetableMark? {
+        guard let symbol = firstStringMatch(in: text, pattern: #"【([^】]+)】"#) else { return nil }
+        let label = text.replacingOccurrences(
+            of: #"【[^】]+】"#, with: "", options: .regularExpression
+        ).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !label.isEmpty else { return nil }
+        return TimetableMark(symbol: symbol == "無印" ? "" : symbol, label: label)
     }
 
     /// 「本日は、<a onclick="document.getElementById('土曜').scrollIntoView();">土曜ダイヤ</a>で運行しております。」

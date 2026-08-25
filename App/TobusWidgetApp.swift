@@ -40,6 +40,7 @@ final class ArrivalModel: ObservableObject {
             scheduled = []
             scheduleKind = nil
             scheduleIsNextDay = false
+            scheduleLegend = []
             errorText = nil
             selectionGeneration += 1
             if let stop = selectedStop {
@@ -68,6 +69,7 @@ final class ArrivalModel: ObservableObject {
             scheduled = []
             scheduleKind = nil
             scheduleIsNextDay = false
+            scheduleLegend = []
             saveSelection()
             selectionGeneration += 1
             Task { await refresh(generation: selectionGeneration) }
@@ -76,11 +78,13 @@ final class ArrivalModel: ObservableObject {
 
     @Published var approach: BusApproach?
     /// 本日の残り定刻（時刻順）。
-    @Published var scheduled: [Date] = []
+    @Published var scheduled: [ScheduledDeparture] = []
     /// `scheduled` がどのダイヤ区分のものか（`平日` / `土曜` / `休日`）。判別できなければ nil。
     @Published var scheduleKind: String?
     /// `scheduled` が翌日分か（本日分が尽きたとき）。
     @Published var scheduleIsNextDay = false
+    /// 時刻表ページの記号説明。記号が無い系統では空。
+    @Published var scheduleLegend: [TimetableMark] = []
     @Published var errorText: String?
     /// 一時停止中は定期取得を行わない。設定は次回起動にも引き継ぐ。
     @Published private(set) var isPaused: Bool
@@ -301,9 +305,10 @@ final class ArrivalModel: ObservableObject {
                 AppSettings.saveSchedule(timetable, routeID: route.id)
                 guard isCurrent() else { return }
                 let upcoming = timetable.upcoming()
-                scheduled = upcoming.dates
+                scheduled = upcoming.departures
                 scheduleKind = upcoming.kind
                 scheduleIsNextDay = upcoming.isNextDay
+                scheduleLegend = timetable.legend
             }
         }
 
@@ -509,10 +514,19 @@ struct MenuContent: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 HStack(spacing: 10) {
-                    ForEach(Array(model.scheduled.prefix(4).enumerated()), id: \.offset) { _, date in
-                        Text(date, format: .dateTime.hour().minute())
+                    ForEach(Array(model.scheduled.prefix(4).enumerated()), id: \.offset) { _, dep in
+                        Text(dep.timeLabel)
                             .monospacedDigit()
                     }
+                }
+                if !model.scheduleLegend.isEmpty {
+                    VStack(alignment: .leading, spacing: 1) {
+                        ForEach(model.scheduleLegend, id: \.symbol) { mark in
+                            Text(mark.caption)
+                        }
+                    }
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
                 }
             }
         }

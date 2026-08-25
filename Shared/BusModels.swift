@@ -59,22 +59,77 @@ struct RouteBlock: Identifiable, Hashable, Codable, Sendable {
     }
 }
 
+/// 時刻表ページの「記号説明」（【ｱ】有明一丁目行 など）。
+struct TimetableMark: Codable, Equatable, Hashable, Sendable {
+    /// 記号そのもの。無印は空文字。
+    let symbol: String
+    let label: String
+
+    var caption: String {
+        symbol.isEmpty ? "無印 \(label)" : "\(symbol) \(label)"
+    }
+}
+
+/// 表示する定刻1便。記号は行き先の区別（無印は `nil`）。
+struct ScheduledDeparture: Equatable, Hashable, Sendable {
+    let date: Date
+    let mark: String?
+
+    /// `22:21` または `22:21ｱ`。
+    var timeLabel: String {
+        let time = date.formatted(.dateTime.hour().minute())
+        if let mark, !mark.isEmpty { return time + mark }
+        return time
+    }
+}
+
 /// 時刻表の1便分（時・分）。
 struct BusTime: Comparable, Hashable, Codable, Sendable {
     let hour: Int
     let minute: Int
+    /// 行き先記号（「ｱ」「ﾛ」など）。無印は nil。
+    let mark: String?
+
+    init(hour: Int, minute: Int, mark: String? = nil) {
+        self.hour = hour
+        self.minute = minute
+        self.mark = mark.flatMap { $0.isEmpty ? nil : $0 }
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        hour = try c.decode(Int.self, forKey: .hour)
+        minute = try c.decode(Int.self, forKey: .minute)
+        let decoded = try c.decodeIfPresent(String.self, forKey: .mark)
+        mark = decoded.flatMap { $0.isEmpty ? nil : $0 }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(hour, forKey: .hour)
+        try c.encode(minute, forKey: .minute)
+        try c.encodeIfPresent(mark, forKey: .mark)
+    }
+
+    private enum CodingKeys: String, CodingKey { case hour, minute, mark }
 
     static func < (lhs: BusTime, rhs: BusTime) -> Bool {
-        (lhs.hour, lhs.minute) < (rhs.hour, rhs.minute)
+        (lhs.hour, lhs.minute, lhs.mark ?? "") < (rhs.hour, rhs.minute, rhs.mark ?? "")
     }
 
     /// 指定日の絶対時刻に変換する。`after` を渡すとそれより後の便だけを返す。
     static func dates(from times: [BusTime], on day: Date, after: Date? = nil) -> [Date] {
+        departures(from: times, on: day, after: after).map(\.date)
+    }
+
+    static func departures(from times: [BusTime], on day: Date, after: Date? = nil) -> [ScheduledDeparture] {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TobusConfig.timeZone
-        let dates = times.compactMap { $0.date(on: day, calendar: calendar) }
-        guard let after else { return dates }
-        return dates.filter { $0 > after }
+        return times.compactMap { time -> ScheduledDeparture? in
+            guard let date = time.date(on: day, calendar: calendar) else { return nil }
+            if let after, date <= after { return nil }
+            return ScheduledDeparture(date: date, mark: time.mark)
+        }
     }
 
     /// 深夜便は24時を超える表記（例: 25時10分）があるため、日をまたぐ場合は繰り上げる。

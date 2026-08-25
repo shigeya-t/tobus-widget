@@ -16,11 +16,13 @@ struct BusEntry: TimelineEntry {
     /// tobus.jpから取得した接近状況。取得できなかった場合はnil。
     let approach: BusApproach?
     /// 本日の残り定刻（無ければ翌日分）。
-    let scheduled: [Date]
+    let scheduled: [ScheduledDeparture]
     /// `scheduled` がどのダイヤ区分のものか（`平日` / `土曜` / `休日`）。判別できなければ nil。
     let scheduleKind: String?
     /// `scheduled` が翌日分か（本日分が尽きたとき）。区分は推定なので見出しで明示する。
     let scheduleIsNextDay: Bool
+    /// 表示中の定刻に出てくる記号の凡例。
+    let scheduleLegend: [TimetableMark]
     /// 一時停止中は通信せず、最後に取得した値をそのまま表示する
     let isPaused: Bool
 
@@ -52,7 +54,7 @@ struct BusEntry: TimelineEntry {
     }
 
     static func placeholder(_ date: Date = Date()) -> BusEntry {
-        BusEntry(date: date, routeID: nil, routeDisplayName: nil, routeLabel: nil, routeDestination: nil, stopName: nil, approach: nil, scheduled: [], scheduleKind: nil, scheduleIsNextDay: false, isPaused: false)
+        BusEntry(date: date, routeID: nil, routeDisplayName: nil, routeLabel: nil, routeDestination: nil, stopName: nil, approach: nil, scheduled: [], scheduleKind: nil, scheduleIsNextDay: false, scheduleLegend: [], isPaused: false)
     }
 }
 
@@ -109,7 +111,8 @@ struct Provider: AppIntentTimelineProvider {
     private func buildEntry(configuration: SelectBusStopIntent, now: Date) -> BusEntry {
         let routeID = configuration.route?.id
         let routeName = configuration.route?.name
-        let schedule = routeID.flatMap { AppSettings.schedule(routeID: $0) }?.upcoming(now: now)
+        let timetable = routeID.flatMap { AppSettings.schedule(routeID: $0) }
+        let upcoming = timetable?.upcoming(now: now)
         return BusEntry(
             date: now,
             routeID: routeID,
@@ -118,9 +121,10 @@ struct Provider: AppIntentTimelineProvider {
             routeDestination: Self.dropFirstWord(of: routeName),
             stopName: configuration.stop?.name,
             approach: routeID.flatMap { AppSettings.snapshot(routeID: $0) },
-            scheduled: schedule?.dates ?? [],
-            scheduleKind: schedule?.kind,
-            scheduleIsNextDay: schedule?.isNextDay ?? false,
+            scheduled: upcoming?.departures ?? [],
+            scheduleKind: upcoming?.kind,
+            scheduleIsNextDay: upcoming?.isNextDay ?? false,
+            scheduleLegend: timetable?.legend ?? [],
             isPaused: AppSettings.isPaused
         )
     }
@@ -250,6 +254,7 @@ struct TobusWidgetEntryView: View {
     @ViewBuilder
     private var scheduleFooter: some View {
         if !entry.scheduled.isEmpty {
+            let shown = Array(entry.scheduled.prefix(family == .systemSmall ? 2 : 3))
             VStack(alignment: .leading, spacing: 1) {
                 Text(TobusConfig.scheduleHeading(kind: entry.scheduleKind, isNextDay: entry.scheduleIsNextDay))
                     .font(Self.footnoteFont)
@@ -257,12 +262,23 @@ struct TobusWidgetEntryView: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                 HStack(spacing: 6) {
-                    ForEach(Array(entry.scheduled.prefix(family == .systemSmall ? 2 : 3).enumerated()), id: \.offset) { _, date in
-                        Text(date, format: .dateTime.hour().minute())
+                    ForEach(Array(shown.enumerated()), id: \.offset) { _, dep in
+                        Text(dep.timeLabel)
                             .font(Self.footnoteFont)
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
                     }
+                }
+                let usedMarks = Set(shown.compactMap(\.mark))
+                let captions = entry.scheduleLegend
+                    .filter { !$0.symbol.isEmpty && usedMarks.contains($0.symbol) }
+                    .map(\.caption)
+                if !captions.isEmpty {
+                    Text(captions.joined(separator: " · "))
+                        .font(Self.footnoteFont)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                 }
             }
         }
