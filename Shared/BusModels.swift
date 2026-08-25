@@ -66,8 +66,12 @@ struct TimetableMark: Codable, Equatable, Hashable, Sendable {
     let label: String
 
     var caption: String {
-        symbol.isEmpty ? "無印 \(label)" : "\(symbol) \(label)"
+        let token = symbol.isEmpty ? "無印" : symbol
+        return "【\(token)】\(label)"
     }
+
+    /// `ForEach` の id に空文字を使うと行が消えることがある。
+    var viewID: String { symbol.isEmpty ? "unmarked" : symbol }
 }
 
 /// 表示する定刻1便。記号は行き先の区別（無印は `nil`）。
@@ -75,10 +79,10 @@ struct ScheduledDeparture: Equatable, Hashable, Sendable {
     let date: Date
     let mark: String?
 
-    /// `22:21` または `22:21ｱ`。
+    /// `22:21` または `22:21 ｱ`。半角カナは等幅数字フォントに混ぜると欠けて見える。
     var timeLabel: String {
         let time = date.formatted(.dateTime.hour().minute())
-        if let mark, !mark.isEmpty { return time + mark }
+        if let mark, !mark.isEmpty { return "\(time) \(mark)" }
         return time
     }
 }

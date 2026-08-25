@@ -515,19 +515,29 @@ struct MenuContent: View {
                     .foregroundStyle(.secondary)
                 HStack(spacing: 10) {
                     ForEach(Array(model.scheduled.prefix(4).enumerated()), id: \.offset) { _, dep in
-                        Text(dep.timeLabel)
-                            .monospacedDigit()
+                        labeledTime(dep)
                     }
                 }
                 if !model.scheduleLegend.isEmpty {
                     VStack(alignment: .leading, spacing: 1) {
-                        ForEach(model.scheduleLegend, id: \.symbol) { mark in
+                        ForEach(model.scheduleLegend, id: \.viewID) { mark in
                             Text(mark.caption)
                         }
                     }
                     .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(.secondary)
                 }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func labeledTime(_ dep: ScheduledDeparture) -> some View {
+        HStack(spacing: 1) {
+            Text(dep.date, format: .dateTime.hour().minute())
+                .monospacedDigit()
+            if let mark = dep.mark, !mark.isEmpty {
+                Text(mark)
             }
         }
     }

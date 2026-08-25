@@ -255,6 +255,9 @@ struct TobusWidgetEntryView: View {
     private var scheduleFooter: some View {
         if !entry.scheduled.isEmpty {
             let shown = Array(entry.scheduled.prefix(family == .systemSmall ? 2 : 3))
+            let captions = entry.scheduleLegend
+                .filter { mark in shown.contains { ($0.mark ?? "") == mark.symbol } }
+                .map(\.caption)
             VStack(alignment: .leading, spacing: 1) {
                 Text(TobusConfig.scheduleHeading(kind: entry.scheduleKind, isNextDay: entry.scheduleIsNextDay))
                     .font(Self.footnoteFont)
@@ -263,21 +266,22 @@ struct TobusWidgetEntryView: View {
                     .minimumScaleFactor(0.8)
                 HStack(spacing: 6) {
                     ForEach(Array(shown.enumerated()), id: \.offset) { _, dep in
-                        Text(dep.timeLabel)
-                            .font(Self.footnoteFont)
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
+                        HStack(spacing: 1) {
+                            Text(dep.date, format: .dateTime.hour().minute())
+                                .monospacedDigit()
+                            if let mark = dep.mark, !mark.isEmpty {
+                                Text(mark)
+                            }
+                        }
+                        .font(Self.footnoteFont)
+                        .foregroundStyle(.secondary)
                     }
                 }
-                let usedMarks = Set(shown.compactMap(\.mark))
-                let captions = entry.scheduleLegend
-                    .filter { !$0.symbol.isEmpty && usedMarks.contains($0.symbol) }
-                    .map(\.caption)
                 if !captions.isEmpty {
                     Text(captions.joined(separator: " · "))
                         .font(Self.footnoteFont)
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
                         .minimumScaleFactor(0.7)
                 }
             }
