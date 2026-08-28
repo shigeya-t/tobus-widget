@@ -185,8 +185,8 @@ enum AppSettings {
     /// 空が渡るのは「その系統に時刻表が無い」ときだけ（取得の失敗は
     /// `BusScheduleError` として投げられ、ここまで来ない）。**そのときは削除する。**
     /// 残すと、時刻表リンクを失った系統の古い表が消えずに残り、`upcoming(now:)` が
-    /// それを今日の日付へ投影してしまう（土曜に保存した表を月曜に
-    /// 「定刻（土曜ダイヤ）」として出す、といったことが起きる）。
+    /// それを今日の日付へ投影してしまう。取得日（`fetchedOnDay`）を保存してある場合は
+    /// 金曜の平日申告を土曜へは適用しないが、空の表を残すと定刻そのものが消えない。
     static func saveSchedule(_ timetable: ParsedTimetable, routeID: String) {
         guard !timetable.tables.isEmpty else {
             defaults.removeObject(forKey: Keys.schedule(routeID))

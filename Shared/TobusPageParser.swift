@@ -25,9 +25,9 @@ struct ParsedBlock {
 /// 時刻表ページの解析結果。
 ///
 /// ページには平日・土曜・休日の3つの表がすべて含まれているため、全部を保持する。
-/// 本日どれを使うかはページ自身が申告してくるが（`todayKind`）、**翌日どれになるかは
-/// ページからは分からない**ため、翌日分を出すときは呼び出し側が区分を決めて選ぶ
-/// （[[TobusConfig]] の `estimatedScheduleKind(on:)`）。
+/// 本日の区分は「本日は〇曜ダイヤ」（`todayKind`）、翌日から最大7日は
+/// 「乗車予定日のダイヤ」（`upcomingKinds`）としてページが申告する。
+/// 申告が無い日だけ [[TobusConfig]] の `estimatedScheduleKind(on:)` で補う。
 struct UpcomingSchedule: Equatable {
     let departures: [ScheduledDeparture]
     let kind: String?
@@ -40,19 +40,33 @@ struct ParsedTimetable: Equatable {
     /// ダイヤ区分（`平日` / `土曜` / `休日`）ごとの時刻表。
     let tables: [String: [BusTime]]
     /// ページが「本日は〇曜ダイヤで運行しております」と申告している区分。読み取れなければ nil。
+    /// **取得日限定。** 日をまたいだあとにこれを今日へ適用すると、金曜の平日申告が
+    /// 土曜まで「定刻（平日ダイヤ）」として残る。
     let todayKind: String?
     /// ページの「記号説明」。記号が無い系統では空。
     let legend: [TimetableMark]
+    /// `todayKind` が指す暦日（`yyyy-MM-dd`、Asia/Tokyo）。古い保存形式では nil。
+    let fetchedOnDay: String?
+    /// 「乗車予定日のダイヤ」の暦日（`yyyy-MM-dd`）→区分。本日を含まないことが多い。
+    let upcomingKinds: [String: String]
 
-    static let empty = ParsedTimetable(tables: [:], todayKind: nil, legend: [])
+    static let empty = ParsedTimetable(tables: [:], todayKind: nil)
 
-    init(tables: [String: [BusTime]], todayKind: String?, legend: [TimetableMark] = []) {
+    init(
+        tables: [String: [BusTime]],
+        todayKind: String?,
+        legend: [TimetableMark] = [],
+        fetchedOnDay: String? = nil,
+        upcomingKinds: [String: String] = [:]
+    ) {
         self.tables = tables
         self.todayKind = todayKind
         self.legend = legend
+        self.fetchedOnDay = fetchedOnDay
+        self.upcomingKinds = upcomingKinds
     }
 
-    /// 本日のダイヤ区分の時刻表。
+    /// ページ取得時点の「本日」区分の時刻表。表示に使う便の選定は `upcoming(now:)`。
     var todayTimes: [BusTime] {
         guard let todayKind else { return [] }
         return tables[todayKind] ?? []
@@ -67,25 +81,34 @@ struct ParsedTimetable: Equatable {
     ///
     /// 本日分が残っていればそれを返す。尽きていれば翌日の始発から返すが、そのとき
     /// **今日と同じ表を使い回してはいけない**（日曜→月曜のようにダイヤ区分が変わる）。
-    /// 翌日の区分はページから分からないので曜日から推定し、推定であることを
-    /// `isNextDay` と `kind` で呼び出し側に伝える（見出しに区分名を出して判断できるようにする）。
+    /// 区分は (1) 取得当日なら `todayKind` (2) 「乗車予定日のダイヤ」 (3) 曜日推定、の順。
+    /// (3) は祝日を外しうるので、見出しに区分名を出して判断できるようにする。
     func upcoming(now: Date = Date()) -> UpcomingSchedule {
-        let remaining = BusTime.departures(from: todayTimes, on: now, after: now)
+        let todayK = scheduleKind(on: now)
+        let remaining = BusTime.departures(from: times(kind: todayK), on: now, after: now)
         if !remaining.isEmpty {
-            return UpcomingSchedule(departures: remaining, kind: todayKind, isNextDay: false)
+            return UpcomingSchedule(departures: remaining, kind: todayK, isNextDay: false)
         }
 
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TobusConfig.timeZone
         guard let tomorrow = calendar.date(byAdding: .day, value: 1, to: now) else {
-            return UpcomingSchedule(departures: [], kind: todayKind, isNextDay: false)
+            return UpcomingSchedule(departures: [], kind: todayK, isNextDay: false)
         }
-        let kind = TobusConfig.estimatedScheduleKind(on: tomorrow)
+        let nextK = scheduleKind(on: tomorrow)
         return UpcomingSchedule(
-            departures: BusTime.departures(from: times(kind: kind), on: tomorrow),
-            kind: kind,
+            departures: BusTime.departures(from: times(kind: nextK), on: tomorrow),
+            kind: nextK,
             isNextDay: true
         )
+    }
+
+    /// 指定日のダイヤ区分。取得当日の申告と乗車予定日の表を優先し、無ければ曜日から推定する。
+    func scheduleKind(on date: Date) -> String? {
+        let key = TobusConfig.calendarDayString(from: date)
+        if fetchedOnDay == key { return todayKind }
+        if let kind = upcomingKinds[key], !kind.isEmpty { return kind }
+        return TobusConfig.estimatedScheduleKind(on: date)
     }
 
     /// 表示中の定刻に出てくる記号だけの凡例。ウィジェットなど幅が無い面向け。
@@ -97,13 +120,15 @@ struct ParsedTimetable: Equatable {
 }
 
 extension ParsedTimetable: Codable {
-    enum CodingKeys: String, CodingKey { case tables, todayKind, legend }
+    enum CodingKeys: String, CodingKey { case tables, todayKind, legend, fetchedOnDay, upcomingKinds }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         tables = try c.decode([String: [BusTime]].self, forKey: .tables)
         todayKind = try c.decodeIfPresent(String.self, forKey: .todayKind)
         legend = try c.decodeIfPresent([TimetableMark].self, forKey: .legend) ?? []
+        fetchedOnDay = try c.decodeIfPresent(String.self, forKey: .fetchedOnDay)
+        upcomingKinds = try c.decodeIfPresent([String: String].self, forKey: .upcomingKinds) ?? [:]
     }
 
     func encode(to encoder: Encoder) throws {
@@ -111,6 +136,8 @@ extension ParsedTimetable: Codable {
         try c.encode(tables, forKey: .tables)
         try c.encodeIfPresent(todayKind, forKey: .todayKind)
         if !legend.isEmpty { try c.encode(legend, forKey: .legend) }
+        try c.encodeIfPresent(fetchedOnDay, forKey: .fetchedOnDay)
+        if !upcomingKinds.isEmpty { try c.encode(upcomingKinds, forKey: .upcomingKinds) }
     }
 }
 
@@ -349,7 +376,9 @@ enum TobusPageParser {
     /// 時刻表ページ（`VCD=cresultttbl&ECD=show`）から、本日のダイヤ区分の便一覧を取り出す。
     /// ページ自身が「本日は、〇曜ダイヤで運行しております」という文言と、対応する表のIDを
     /// 教えてくれるため、自前で祝日判定などをする必要がない。
-    static func parseTimetable(html: String) throws -> ParsedTimetable {
+    ///
+    /// `now` は取得日の記録と、「乗車予定日のダイヤ」の年（ページは `8/30(日)` 形式）の解決に使う。
+    static func parseTimetable(html: String, now: Date = Date()) throws -> ParsedTimetable {
         let doc = try SwiftSoup.parse(html)
 
         // ページには平日・土曜・休日の表がすべて入っている。翌日分を出すために全部拾っておく
@@ -366,7 +395,9 @@ enum TobusPageParser {
         return ParsedTimetable(
             tables: tables,
             todayKind: try todayScheduleTableId(doc: doc),
-            legend: try parseLegend(doc: doc)
+            legend: try parseLegend(doc: doc),
+            fetchedOnDay: TobusConfig.calendarDayString(from: now),
+            upcomingKinds: try upcomingScheduleKinds(doc: doc, now: now)
         )
     }
 
@@ -444,6 +475,56 @@ enum TobusPageParser {
             }
         }
         return nil
+    }
+
+    /// 「乗車予定日のダイヤはこちら」に並ぶ、翌日から最大7日分の区分。
+    ///
+    /// 本日は「本日は〇曜ダイヤ」側にあり、この一覧は今日を含まないことが多い
+    /// （2026-08-29 の実ページは 8/30〜9/5）。金曜に取った表を土曜朝に読むときに、
+    /// ここの「8/29(土): 土曜ダイヤ」を使わないと、`todayKind` の平日が残る。
+    private static func upcomingScheduleKinds(doc: Document, now: Date) throws -> [String: String] {
+        guard let dianame = try doc.select("#dianame").first() else { return [:] }
+        var kinds: [String: String] = [:]
+        for row in try dianame.select("tr").array() {
+            let cells = try row.select("td").array()
+            guard let dateCell = cells.first(where: { (try? $0.attr("id"))?.hasPrefix("td_") == true }),
+                  let date = calendarDate(fromMonthDayText: try dateCell.text(), now: now)
+            else { continue }
+            guard let anchor = try row.select("a").first() else { continue }
+            let onclick = try anchor.attr("onclick")
+            guard let kind = firstStringMatch(in: onclick, pattern: #"getElementById\('([^']+)'\)"#),
+                  Self.scheduleKinds.contains(kind)
+            else { continue }
+            kinds[TobusConfig.calendarDayString(from: date)] = kind
+        }
+        return kinds
+    }
+
+    /// `8/30(日)` を `now` と同じ年の日付にする。年をまたぐ（12/31 の翌日が 1/1）ときは翌年。
+    private static func calendarDate(fromMonthDayText text: String, now: Date) -> Date? {
+        guard let regex = try? NSRegularExpression(pattern: #"(\d{1,2})/(\d{1,2})"#),
+              let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+              match.numberOfRanges > 2,
+              let monthRange = Range(match.range(at: 1), in: text),
+              let dayRange = Range(match.range(at: 2), in: text),
+              let month = Int(text[monthRange]), let day = Int(text[dayRange])
+        else { return nil }
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TobusConfig.timeZone
+        let nowParts = calendar.dateComponents([.year, .month, .day], from: now)
+        guard let year = nowParts.year, let today = calendar.date(from: nowParts) else { return nil }
+
+        var parts = DateComponents()
+        parts.year = year
+        parts.month = month
+        parts.day = day
+        guard var date = calendar.date(from: parts) else { return nil }
+        if date < today {
+            parts.year = year + 1
+            date = calendar.date(from: parts) ?? date
+        }
+        return date
     }
 
     private static func firstStringMatch(in text: String, pattern: String) -> String? {
