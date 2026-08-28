@@ -255,8 +255,9 @@ struct TobusWidgetEntryView: View {
     private var scheduleFooter: some View {
         if !entry.scheduled.isEmpty {
             let shown = Array(entry.scheduled.prefix(family == .systemSmall ? 2 : 3))
+            let usedMarks = Set(shown.compactMap(\.mark).filter { !$0.isEmpty })
             let captions = entry.scheduleLegend
-                .filter { mark in shown.contains { ($0.mark ?? "") == mark.symbol } }
+                .filter { usedMarks.contains($0.symbol) }
                 .map(\.caption)
             VStack(alignment: .leading, spacing: 1) {
                 Text(TobusConfig.scheduleHeading(kind: entry.scheduleKind, isNextDay: entry.scheduleIsNextDay))

@@ -89,8 +89,9 @@ struct ParsedTimetable: Equatable {
     }
 
     /// 表示中の定刻に出てくる記号だけの凡例。ウィジェットなど幅が無い面向け。
+    /// 無印は系統の行き先そのものなので含めない（時刻にも記号が付いていない）。
     func legend(appearingIn departures: [ScheduledDeparture]) -> [TimetableMark] {
-        let used = Set(departures.map { $0.mark ?? "" })
+        let used = Set(departures.compactMap(\.mark).filter { !$0.isEmpty })
         return legend.filter { used.contains($0.symbol) }
     }
 }
