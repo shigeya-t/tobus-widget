@@ -14,10 +14,11 @@ enum TobusConfig {
 
     /// 指定日のダイヤ区分を曜日から推定する（月〜金→平日、土→土曜、日→休日）。
     ///
-    /// **本日の区分にこれを使ってはいけない。** tobus.jp は実際の運行区分をページで申告しており、
+    /// **ページの申告がある日にはこれを使ってはいけない。** tobus.jp は実際の運行区分を
+    /// 「本日は〇曜ダイヤ」と「乗車予定日のダイヤ」（翌日から最大7日）で教えており、
     /// 暦とは一致しない（2026-08-15の土曜は、お盆のため多くの系統が休日ダイヤだった）。
-    /// これは「翌日の始発を前夜に出す」ためだけの推定で、祝日も判定していない。
-    /// 外れうる値なので、表示側は必ず区分名を添えて推定と分かるようにすること。
+    /// 申告が無い日（取得日から8日目以降など）のフォールバックで、祝日も判定していない。
+    /// 外れうる値なので、表示側は必ず区分名を添えて判断できるようにすること。
     static func estimatedScheduleKind(on date: Date) -> String {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = timeZone
@@ -26,5 +27,13 @@ enum TobusConfig {
         case 7: return "土曜"
         default: return "平日"
         }
+    }
+
+    /// `Asia/Tokyo` の暦日を `yyyy-MM-dd` にする。時刻表の取得日・乗車予定日のキーに使う。
+    static func calendarDayString(from date: Date) -> String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        let c = calendar.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
     }
 }

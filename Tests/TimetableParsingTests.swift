@@ -15,6 +15,14 @@ import XCTest
 /// 期待値の「休日」を暦から導けるものと誤解しないこと。
 final class TimetableParsingTests: XCTestCase {
 
+    private func date(_ month: Int, _ day: Int) -> Date {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TobusConfig.timeZone
+        var c = DateComponents()
+        (c.year, c.month, c.day, c.hour) = (2026, month, day, 12)
+        return calendar.date(from: c)!
+    }
+
     private func fixture(_ name: String) throws -> String {
         let url = try XCTUnwrap(
             Bundle(for: Self.self).url(forResource: name, withExtension: "html"),
@@ -74,10 +82,12 @@ final class TimetableParsingTests: XCTestCase {
     /// フィクスチャは休日ダイヤと申告しているので、平日の表とは異なる結果になるはず。
     func testUsesScheduleTableDeclaredByPage() throws {
         let html = try fixture("timetable_direct_gyo10")
-        let parsed = try TobusPageParser.parseTimetable(html: html)
+        let fetchedAt = date(8, 16)
+        let parsed = try TobusPageParser.parseTimetable(html: html, now: fetchedAt)
 
         XCTAssertTrue(html.contains("getElementById('休日')"), "フィクスチャは休日ダイヤを申告している")
         XCTAssertEqual(parsed.todayKind, "休日", "ページの申告どおりの区分を返す")
+        XCTAssertEqual(parsed.fetchedOnDay, "2026-08-16")
         XCTAssertFalse(parsed.todayTimes.isEmpty)
         XCTAssertEqual(
             Set(parsed.tables.keys), ["平日", "土曜", "休日"],
@@ -87,6 +97,51 @@ final class TimetableParsingTests: XCTestCase {
             parsed.tables["平日"], parsed.tables["休日"],
             "区分ごとに別の時刻表であること（使い回すと翌日の始発を誤る）"
         )
+        XCTAssertEqual(parsed.upcomingKinds["2026-08-16"], "休日")
+        XCTAssertEqual(parsed.upcomingKinds["2026-08-17"], "平日")
+        XCTAssertEqual(parsed.upcomingKinds["2026-08-22"], "土曜")
+        XCTAssertEqual(parsed.upcomingKinds.count, 7)
+    }
+
+    /// 実ページ（土曜）と同じく、乗車予定日の一覧が翌日始まりでも読める。
+    func testParsesUpcomingKindsStartingTheNextDay() throws {
+        let html = """
+        <p>本日は、<a onclick="document.getElementById('土曜').scrollIntoView();">土曜ダイヤ</a>で運行しております。</p>
+        <div id="dianame">
+          <table><tr>
+            <td id="td_0">8/30(日)</td><td>:</td>
+            <td><a onclick="document.getElementById('休日').scrollIntoView();">休日ダイヤ</a></td>
+          </tr></table>
+          <table><tr>
+            <td id="td_1">8/31(月)</td><td>:</td>
+            <td><a onclick="document.getElementById('平日').scrollIntoView();">平日ダイヤ</a></td>
+          </tr></table>
+        </div>
+        <table id="土曜"><tr><th>6</th><td>30</td></tr></table>
+        """
+        let parsed = try TobusPageParser.parseTimetable(html: html, now: date(8, 29))
+        XCTAssertEqual(parsed.todayKind, "土曜")
+        XCTAssertEqual(parsed.fetchedOnDay, "2026-08-29")
+        XCTAssertNil(parsed.upcomingKinds["2026-08-29"], "本日は乗車予定日一覧に含まれない")
+        XCTAssertEqual(parsed.upcomingKinds["2026-08-30"], "休日")
+        XCTAssertEqual(parsed.upcomingKinds["2026-08-31"], "平日")
+    }
+
+    /// 年をまたぐ乗車予定日（12/31 取得で 1/1）は翌年にする。
+    func testUpcomingKindAcrossNewYearUsesNextYear() throws {
+        let html = """
+        <p>本日は、<a onclick="document.getElementById('平日').scrollIntoView();">平日ダイヤ</a>で運行しております。</p>
+        <div id="dianame">
+          <table><tr>
+            <td id="td_0">1/1(金)</td><td>:</td>
+            <td><a onclick="document.getElementById('休日').scrollIntoView();">休日ダイヤ</a></td>
+          </tr></table>
+        </div>
+        <table id="平日"><tr><th>6</th><td>00</td></tr></table>
+        """
+        let parsed = try TobusPageParser.parseTimetable(html: html, now: date(12, 31))
+        XCTAssertEqual(parsed.upcomingKinds["2027-01-01"], "休日")
+        XCTAssertNil(parsed.upcomingKinds["2026-01-01"])
     }
 
     /// 時刻表として読めないページ（HTTP 200 で返るエラーページなど）は、表が空の結果になる。
@@ -134,7 +189,12 @@ final class TimetableParsingTests: XCTestCase {
           <tr><th>23</th><td><span>ｱ</span>06</td></tr>
         </table>
         """
-        let parsed = try TobusPageParser.parseTimetable(html: html)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TobusConfig.timeZone
+        var c = DateComponents()
+        (c.year, c.month, c.day, c.hour, c.minute) = (2026, 8, 25, 22, 9)
+        let now = calendar.date(from: c)!
+        let parsed = try TobusPageParser.parseTimetable(html: html, now: now)
         XCTAssertEqual(parsed.todayTimes, [
             BusTime(hour: 20, minute: 51),
             BusTime(hour: 22, minute: 6, mark: "ｱ"),
@@ -147,11 +207,6 @@ final class TimetableParsingTests: XCTestCase {
             [TimetableMark(symbol: "", label: "東京ビッグサイト行"), TimetableMark(symbol: "ｱ", label: "有明一丁目行")]
         )
 
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TobusConfig.timeZone
-        var c = DateComponents()
-        (c.year, c.month, c.day, c.hour, c.minute) = (2026, 8, 25, 22, 9)
-        let now = calendar.date(from: c)!
         let upcoming = parsed.upcoming(now: now)
         XCTAssertFalse(upcoming.isNextDay, "22時台が残っているのに翌日へ切り替えてはいけない")
         XCTAssertEqual(upcoming.kind, "平日")
@@ -170,6 +225,8 @@ final class TimetableParsingTests: XCTestCase {
         let json = #"{"tables":{"平日":[{"hour":6,"minute":50}]},"todayKind":"平日"}"#
         let parsed = try JSONDecoder().decode(ParsedTimetable.self, from: Data(json.utf8))
         XCTAssertEqual(parsed.legend, [])
+        XCTAssertEqual(parsed.fetchedOnDay, nil)
+        XCTAssertEqual(parsed.upcomingKinds, [:])
         XCTAssertEqual(parsed.todayTimes, [BusTime(hour: 6, minute: 50)])
         XCTAssertNil(parsed.todayTimes.first?.mark)
     }
