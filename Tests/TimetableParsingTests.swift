@@ -163,6 +163,20 @@ final class TimetableParsingTests: XCTestCase {
             ["【ｱ】有明一丁目行"],
             "残っている便の記号だけを凡例として出す"
         )
+
+        (c.year, c.month, c.day, c.hour, c.minute) = (2026, 8, 25, 20, 40)
+        let evening = parsed.upcoming(now: calendar.date(from: c)!).departures
+        XCTAssertNil(evening[0].mark, "20:51 は無印")
+        XCTAssertEqual(
+            parsed.legend(appearingIn: Array(evening.prefix(1))).map(\.caption),
+            [],
+            "無印だけの枠では凡例を出さない（行き先は系統名に既にある）"
+        )
+        XCTAssertEqual(
+            parsed.legend(appearingIn: Array(evening.prefix(3))).map(\.caption),
+            ["【ｱ】有明一丁目行"],
+            "無印と混在していても記号付きの凡例だけ出す"
+        )
     }
 
     /// 記号・凡例を足す前に保存したJSONも読める（再取得までの間、定刻が消えないように）。
