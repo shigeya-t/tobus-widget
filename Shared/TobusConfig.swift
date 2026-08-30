@@ -36,4 +36,12 @@ enum TobusConfig {
         let c = calendar.dateComponents([.year, .month, .day], from: date)
         return String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
     }
+
+    /// 指定時刻の次の0時（Asia/Tokyo）。ウィジェットが日をまたいでもアプリなしで定刻を切り替えるために使う。
+    static func startOfNextCalendarDay(after date: Date) -> Date? {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        let start = calendar.startOfDay(for: date)
+        return calendar.date(byAdding: .day, value: 1, to: start)
+    }
 }

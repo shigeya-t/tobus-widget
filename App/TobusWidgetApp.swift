@@ -90,6 +90,8 @@ final class ArrivalModel: ObservableObject {
     @Published private(set) var isPaused: Bool
 
     private var timer: Timer?
+    /// 日付が変わったとき、保存済み時刻表から当日の区分を載せ直す（60秒タイマーが App Nap で遅れても拾う）。
+    private var dayChangeTimer: Timer?
     private var selectionGeneration = 0
     private var searchGeneration = 0
     private var didRestoreSelection = false
@@ -98,6 +100,7 @@ final class ArrivalModel: ObservableObject {
         isPaused = AppSettings.isPaused
         observePauseChangesFromWidget()
         observeManualRefreshRequestsFromWidget()
+        scheduleDayChangeReload()
         Task { await restoreSelectionIfNeeded() }
         if !isPaused {
             startTimer()
@@ -111,6 +114,38 @@ final class ArrivalModel: ObservableObject {
         timer = Timer.scheduledTimer(withTimeInterval: Self.refreshInterval, repeats: true) { [weak self] _ in
             Task { @MainActor in await self?.refresh() }
         }
+    }
+
+    private func scheduleDayChangeReload() {
+        dayChangeTimer?.invalidate()
+        guard let midnight = TobusConfig.startOfNextCalendarDay(after: Date()) else { return }
+        let timer = Timer(fire: midnight, interval: 0, repeats: false) { [weak self] _ in
+            Task { @MainActor in await self?.handleCalendarDayChange() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        dayChangeTimer = timer
+    }
+
+    private func handleCalendarDayChange() async {
+        applySavedSchedule()
+        WidgetCenter.shared.reloadAllTimelines()
+        if !isPaused {
+            await refresh(force: true)
+        }
+        scheduleDayChangeReload()
+    }
+
+    /// 通信せず、保存済み時刻表を「今」の日付で載せ直す。
+    /// 取得に失敗した回や、日付が変わった直後に金曜／土曜の申告が残るのを防ぐ。
+    private func applySavedSchedule() {
+        guard let routeID = selectedRoute?.id,
+              let timetable = AppSettings.schedule(routeID: routeID)
+        else { return }
+        let upcoming = timetable.upcoming()
+        scheduled = upcoming.departures
+        scheduleKind = upcoming.kind
+        scheduleIsNextDay = upcoming.isNextDay
+        scheduleLegend = timetable.legend
     }
 
     /// 前回選択していた停留所・系統を、再検索なしで復元する。
@@ -274,7 +309,12 @@ final class ArrivalModel: ObservableObject {
     ///   - force: 一時停止中でも取得する（「今すぐ更新」など明示操作のとき）
     ///   - generation: 取得開始時点の選択世代。省略時は現在の選択に追従する。
     func refresh(force: Bool = false, generation: Int? = nil) async {
-        guard force || !isPaused else { return }
+        applySavedSchedule()
+
+        guard force || !isPaused else {
+            WidgetCenter.shared.reloadAllTimelines()
+            return
+        }
 
         // メニューバー自身の選択（あれば）を取得する。
         if let route = selectedRoute {
