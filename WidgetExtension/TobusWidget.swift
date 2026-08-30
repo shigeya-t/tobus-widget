@@ -69,8 +69,15 @@ struct Provider: AppIntentTimelineProvider {
 
     func timeline(for configuration: SelectBusStopIntent, in context: Context) async -> Timeline<BusEntry> {
         let now = Date()
-        let entry = buildEntry(configuration: configuration, now: now)
-        return Timeline(entries: [entry], policy: .after(reloadDate(for: entry, now: now)))
+        let today = buildEntry(configuration: configuration, now: now)
+        // WidgetKit は macOS ではタイムライン要求をほとんど実行しない。エントリはスナップショットなので、
+        // 土曜に組み立てた「定刻（土曜ダイヤ）」が日曜まで残る。翌日0時のエントリを載せておけば、
+        // アプリが動いていなくても日付が変わった時点で休日ダイヤ等へ切り替わる。
+        var entries = [today]
+        if let midnight = TobusConfig.startOfNextCalendarDay(after: now) {
+            entries.append(buildEntry(configuration: configuration, now: midnight))
+        }
+        return Timeline(entries: entries, policy: .after(reloadDate(for: today, now: now)))
     }
 
     /// 接近状況を取り直すタイミング。tobus.jp側のエッジキャッシュが60秒のため、それより短くしても意味は薄い。

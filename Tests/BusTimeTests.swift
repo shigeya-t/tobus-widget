@@ -121,6 +121,21 @@ final class TimetableSelectionTests: XCTestCase {
         XCTAssertFalse(result.isNextDay)
     }
 
+    /// 土曜に取った表を日曜朝に読む。todayKind は土曜のままなので、乗車予定日の申告を使う。
+    func testDoesNotKeepSaturdayKindOnSundayAfterSaturdayFetch() {
+        let saturday = ParsedTimetable(
+            tables: timetable.tables,
+            todayKind: "土曜",
+            fetchedOnDay: "2026-08-29",
+            upcomingKinds: ["2026-08-30": "休日"]
+        )
+        let result = saturday.upcoming(now: date(8, 30, 13, 0))
+        XCTAssertEqual(result.kind, "休日")
+        XCTAssertFalse(result.isNextDay)
+        XCTAssertEqual(result.dates.first, date(8, 30, 21, 0))
+        XCTAssertNotEqual(result.kind, "土曜", "土曜の本日申告を日曜に残してはいけない")
+    }
+
     /// お盆の金曜。推定なら翌日は土曜ダイヤだが、ページは休日と申告している。
     func testFridayNightUsesForecastKindNotWeekdayEstimate() {
         let friday = ParsedTimetable(
@@ -167,6 +182,18 @@ final class ScheduleKindTests: XCTestCase {
         XCTAssertEqual(TobusConfig.estimatedScheduleKind(on: date(8, 22)), "土曜")
         XCTAssertEqual(TobusConfig.estimatedScheduleKind(on: date(8, 23)), "休日", "日曜")
         XCTAssertEqual(TobusConfig.calendarDayString(from: date(8, 29)), "2026-08-29")
+    }
+
+    func testStartOfNextCalendarDayIsMidnightJST() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TobusConfig.timeZone
+        var c = DateComponents()
+        (c.year, c.month, c.day, c.hour, c.minute) = (2026, 8, 29, 15, 30)
+        let saturdayAfternoon = calendar.date(from: c)!
+        let next = TobusConfig.startOfNextCalendarDay(after: saturdayAfternoon)
+        XCTAssertEqual(TobusConfig.calendarDayString(from: next!), "2026-08-30")
+        XCTAssertEqual(calendar.component(.hour, from: next!), 0)
+        XCTAssertEqual(calendar.component(.minute, from: next!), 0)
     }
 
     /// 本日分は tobus.jp の申告どおり、翌日分は推定と分かる見出しにする。
