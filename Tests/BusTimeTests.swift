@@ -136,6 +136,21 @@ final class TimetableSelectionTests: XCTestCase {
         XCTAssertNotEqual(result.kind, "土曜", "土曜の本日申告を日曜に残してはいけない")
     }
 
+    /// 日曜に取った表を月曜に読む。todayKind は休日のままなので、乗車予定日の申告を使う。
+    func testDoesNotKeepHolidayKindOnMondayAfterSundayFetch() {
+        let sunday = ParsedTimetable(
+            tables: timetable.tables,
+            todayKind: "休日",
+            fetchedOnDay: "2026-08-30",
+            upcomingKinds: ["2026-08-31": "平日"]
+        )
+        let result = sunday.upcoming(now: date(8, 31, 11, 0))
+        XCTAssertEqual(result.kind, "平日")
+        XCTAssertFalse(result.isNextDay)
+        XCTAssertEqual(result.dates.first, date(8, 31, 20, 0))
+        XCTAssertNotEqual(result.kind, "休日", "日曜の本日申告を月曜に残してはいけない")
+    }
+
     /// お盆の金曜。推定なら翌日は土曜ダイヤだが、ページは休日と申告している。
     func testFridayNightUsesForecastKindNotWeekdayEstimate() {
         let friday = ParsedTimetable(

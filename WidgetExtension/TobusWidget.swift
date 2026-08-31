@@ -70,9 +70,8 @@ struct Provider: AppIntentTimelineProvider {
     func timeline(for configuration: SelectBusStopIntent, in context: Context) async -> Timeline<BusEntry> {
         let now = Date()
         let today = buildEntry(configuration: configuration, now: now)
-        // WidgetKit は macOS ではタイムライン要求をほとんど実行しない。エントリはスナップショットなので、
-        // 土曜に組み立てた「定刻（土曜ダイヤ）」が日曜まで残る。翌日0時のエントリを載せておけば、
-        // アプリが動いていなくても日付が変わった時点で休日ダイヤ等へ切り替わる。
+        // WidgetKit は macOS ではタイムライン要求をほとんど実行せず、エントリ日付の切り替えも
+        // 当てにならない。翌日0時のエントリは保険で載せ、表示側は TimelineView で毎分載せ直す。
         var entries = [today]
         if let midnight = TobusConfig.startOfNextCalendarDay(after: now) {
             entries.append(buildEntry(configuration: configuration, now: midnight))
@@ -260,40 +259,54 @@ struct TobusWidgetEntryView: View {
 
     @ViewBuilder
     private var scheduleFooter: some View {
-        if !entry.scheduled.isEmpty {
-            let shown = Array(entry.scheduled.prefix(family == .systemSmall ? 2 : 3))
-            let usedMarks = Set(shown.compactMap(\.mark).filter { !$0.isEmpty })
-            let captions = entry.scheduleLegend
-                .filter { usedMarks.contains($0.symbol) }
-                .map(\.caption)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(TobusConfig.scheduleHeading(kind: entry.scheduleKind, isNextDay: entry.scheduleIsNextDay))
-                    .font(Self.footnoteFont)
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                HStack(spacing: 6) {
-                    ForEach(Array(shown.enumerated()), id: \.offset) { _, dep in
-                        HStack(spacing: 1) {
-                            Text(dep.date, format: .dateTime.hour().minute())
-                                .monospacedDigit()
-                            if let mark = dep.mark, !mark.isEmpty {
-                                Text(mark)
+        // エントリに焼き込んだ定刻は、WidgetKit がタイムラインを進めないと前日のダイヤのまま残る。
+        // 保存済み時刻表から「今」の区分を毎分載せ直せば、アプリなしでも日付変更に追従できる。
+        TimelineView(.everyMinute) { context in
+            let live = resolvedSchedule(at: context.date)
+            if !live.departures.isEmpty {
+                let shown = Array(live.departures.prefix(family == .systemSmall ? 2 : 3))
+                let usedMarks = Set(shown.compactMap(\.mark).filter { !$0.isEmpty })
+                let captions = live.legend
+                    .filter { usedMarks.contains($0.symbol) }
+                    .map(\.caption)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(TobusConfig.scheduleHeading(kind: live.kind, isNextDay: live.isNextDay))
+                        .font(Self.footnoteFont)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    HStack(spacing: 6) {
+                        ForEach(Array(shown.enumerated()), id: \.offset) { _, dep in
+                            HStack(spacing: 1) {
+                                Text(dep.date, format: .dateTime.hour().minute())
+                                    .monospacedDigit()
+                                if let mark = dep.mark, !mark.isEmpty {
+                                    Text(mark)
+                                }
                             }
+                            .font(Self.footnoteFont)
+                            .foregroundStyle(.secondary)
                         }
-                        .font(Self.footnoteFont)
-                        .foregroundStyle(.secondary)
                     }
-                }
-                if !captions.isEmpty {
-                    Text(captions.joined(separator: " · "))
-                        .font(Self.footnoteFont)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.7)
+                    if !captions.isEmpty {
+                        Text(captions.joined(separator: " · "))
+                            .font(Self.footnoteFont)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.7)
+                    }
                 }
             }
         }
+    }
+
+    /// タイムラインのスナップショットではなく、保存済み時刻表を `date` 時点で解釈した結果。
+    private func resolvedSchedule(at date: Date) -> (departures: [ScheduledDeparture], kind: String?, isNextDay: Bool, legend: [TimetableMark]) {
+        if let routeID = entry.routeID, let timetable = AppSettings.schedule(routeID: routeID) {
+            let upcoming = timetable.upcoming(now: date)
+            return (upcoming.departures, upcoming.kind, upcoming.isNextDay, timetable.legend)
+        }
+        return (entry.scheduled, entry.scheduleKind, entry.scheduleIsNextDay, entry.scheduleLegend)
     }
 
     @ViewBuilder

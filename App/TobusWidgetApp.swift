@@ -137,7 +137,7 @@ final class ArrivalModel: ObservableObject {
 
     /// 通信せず、保存済み時刻表を「今」の日付で載せ直す。
     /// 取得に失敗した回や、日付が変わった直後に金曜／土曜の申告が残るのを防ぐ。
-    private func applySavedSchedule() {
+    func applySavedSchedule() {
         guard let routeID = selectedRoute?.id,
               let timetable = AppSettings.schedule(routeID: routeID)
         else { return }
@@ -473,6 +473,7 @@ struct MenuContent: View {
             // キーウィンドウにならず、TextFieldがキー入力を受け取れないことがある。
             // 明示的にアプリをアクティブ化し、検索欄にフォーカスを当てる。
             NSApp.activate(ignoringOtherApps: true)
+            model.applySavedSchedule()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                 searchFieldFocused = true
             }
