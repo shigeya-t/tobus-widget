@@ -103,6 +103,45 @@ final class TimetableParsingTests: XCTestCase {
         XCTAssertEqual(parsed.upcomingKinds.count, 7)
     }
 
+    /// 都０５－２の実ページ（土曜）。「本日は土曜ダイヤ」なのに、親テキストが「本日は」で
+    /// 始まるリンクを文書全体から拾うと、乗車予定日の平日を本日と誤ることがある。
+    func testSaturdayTo05_2DeclaresSaturdayKind() throws {
+        let parsed = try TobusPageParser.parseTimetable(
+            html: try fixture("timetable_to05_2_saturday"),
+            now: date(9, 5)
+        )
+        XCTAssertEqual(parsed.todayKind, "土曜")
+        XCTAssertEqual(parsed.fetchedOnDay, "2026-09-05")
+        XCTAssertNil(parsed.upcomingKinds["2026-09-05"], "本日は乗車予定日一覧に含まれない")
+        XCTAssertEqual(parsed.upcomingKinds["2026-09-06"], "休日")
+        XCTAssertEqual(parsed.tables["土曜"]?.first, BusTime(hour: 6, minute: 53))
+        XCTAssertNotEqual(parsed.tables["平日"]?.first, parsed.tables["土曜"]?.first)
+    }
+
+    /// 「本日は」のリンクが span で包まれ、同じ段落に乗車予定日の平日リンクが居る。
+    /// 親テキストの hasPrefix("本日は") で文書全体を拾うと平日を返す。
+    func testTodayKindUsesLinkInsideTodayParagraphNotSiblingWeekday() throws {
+        let html = """
+        <p>本日は、<span><a onclick="document.getElementById('土曜').scrollIntoView();">土曜ダイヤ</a></span>で運行しております。
+        <a onclick="document.getElementById('平日').scrollIntoView();">平日ダイヤ</a></p>
+        <table id="土曜"><tr><th>6</th><td>53</td></tr></table>
+        <table id="平日"><tr><th>6</th><td>50</td></tr></table>
+        """
+        let parsed = try TobusPageParser.parseTimetable(html: html, now: date(9, 5))
+        XCTAssertEqual(parsed.todayKind, "土曜", "段落内の本日申告を、巻き込まれた平日リンクより優先する")
+    }
+
+    /// 「本日は」の段落が無い（読み上げ用ページなど）ときは hidden DYDIV で区分を取る。
+    func testFallsBackToDayDivWhenTodayParagraphIsMissing() throws {
+        let html = """
+        <input type="hidden" id="dayDiv" name="DYDIV" value="2"/>
+        <table id="平日"><tr><th>6</th><td>50</td></tr></table>
+        <table id="土曜"><tr><th>6</th><td>53</td></tr></table>
+        """
+        let parsed = try TobusPageParser.parseTimetable(html: html, now: date(9, 5))
+        XCTAssertEqual(parsed.todayKind, "土曜")
+    }
+
     /// 実ページ（土曜）と同じく、乗車予定日の一覧が翌日始まりでも読める。
     func testParsesUpcomingKindsStartingTheNextDay() throws {
         let html = """

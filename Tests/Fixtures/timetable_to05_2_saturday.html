@@ -1,0 +1,744 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+
+<title>都０５－２ 勝どき南 時刻表 ｜ 都バス運行情報サービス ｜ 東京都交通局</title>
+<meta name="keywords" content="都営,都バス,都電,荒川線,バスロケ" />
+<meta name="description" content="東京都交通局の都バス系統運行状況について" />
+<link rel="Shortcut Icon" type="image/x-icon" href="favicon.ico" />
+<link rel="stylesheet" href="pc/css/set.css" type="text/css" media="all" />
+<link rel="stylesheet" href="pc/css/print.css" type="text/css" media="print" />
+<link rel="stylesheet" href="pc/css/dropdown.css" type="text/css" media="screen, projection"/>
+<link rel="stylesheet" href="pc/css/jquery.cluetip.css" type="text/css" />
+<link rel="stylesheet" href="pc/css/telop.css" type="text/css" media="screen, projection"/>
+<link rel="stylesheet" href="pc/css/layout_timetable.css" type="text/css" media="all" />
+<link rel="stylesheet" href="pc/css/marquee.css" type="text/css" />
+
+<style type="text/css">
+<!--
+.pointcur, .tipmenu-head, .tipmenu-sub {
+  cursor: pointer;
+}
+-->
+</style>
+
+<script type="text/javascript" src="pc/common/js/jquery.js" charset="utf-8"></script>
+<script type="text/javascript" src="pc/common/js/jquery.cookie.js" charset="utf-8"></script>
+<script type="text/javascript" src="pc/common/js/fontsizechange.js" charset="utf-8"></script>
+<script type="text/javascript" src="pc/common/js/jquery.dropdownPlain.js" charset="utf-8"></script>
+<script type="text/javascript" src="pc/common/js/jquery.cluetip.js" charset="utf-8"></script>
+<script type="text/javascript" src="pc/common/js/jquery.popupwindow.js" charset="utf-8"></script>
+<script type="text/javascript" src="pc/common/js/jquery.lightbox_me.js" charset="utf-8"></script>
+
+<script type="text/javascript" src="pc/common/js/default_prg.js" charset="utf-8"></script>
+<script type="text/javascript" src="pc/common/js/default_util.js" charset="utf-8"></script>
+
+
+
+
+
+
+
+
+
+<meta name="ROBOTS" content="NOINDEX,NOFOLLOW,NOARCHIVE" />
+
+<script language="JavaScript" type="text/javascript">
+<!--
+$(function(){
+	// ツールチップメニュー(時刻表)
+	$('a.tipmenu-head').cluetip({
+		activation: 'click',
+		arrows: true,
+		closePosition: 'title',
+		closeText: '<b>×<\/b>',
+		cursor: 'pointer',
+		local:true,
+		sticky: true,
+		positionBy: 'fixed',
+		leftOffset: 10,
+		topOffset: 8,
+		width: 120
+	});
+
+	
+	
+	$('.a_araden').attr({
+		href : "https://tobus.jp/tlsys/navi"
+	});
+	
+	$('.a_global').attr({
+		href : "https://tobus.jp/blsys/navi?LCD=e"
+	});
+
+	// トップ 画面へ
+	$('.func_top').click(function(e) {
+		 return linkProc('TOP');
+	});
+	// 系統運行状況 画面へ
+	$('.func_routeserviceinfo').click(function(e) {
+		return linkProc('rsinfo');
+	});
+	// 車両接近情報-五十音選択 画面へ
+	$('.func_approach_syllable').click(function(e) {
+		return linkProc('apsy');
+	});
+	// 車両接近情報-鉄道駅選択 画面へ
+	$('.func_approach_railway').click(function(e) {
+		return linkProc('aprw');
+	});
+	// 車両接近情報-停留所名称検索 画面へ
+	$('.func_approach_searchstop').click(function(e) {
+		return linkProc('apss');
+	});
+	// 都営交通経路検索 画面へ
+	$('.func_searchroute').click(function(e) {
+		return linkProc('srrtm');
+	});
+	// 車両検索-ラッピングバス 画面へ
+	$('.func_search_wrappingbus').click(function(e) {
+		return linkProc('srwrapbus');
+	});
+	
+	// 車両検索-車種検索 画面へ
+	$('.func_search_model').click(function(e) {
+		return linkProc('srmodel');
+	});
+	
+	// 停留所地図検索 画面へ
+	$('.func_searchstop').click(function(e) {
+		return linkProc('srspm');
+	});
+	// 時刻表-改正時刻表 画面へ
+	$('.func_timetable_revised').click(function(e) {
+		return linkProc('ttre');
+
+	});
+	// 時刻表-五十音選択 画面へ
+	$('.func_timetable_syllable').click(function(e) {
+		return linkProc('ttsy');
+	});
+
+	// 時刻表-鉄道駅選択 画面へ
+	$('.func_timetable_railway').click(function(e) {
+		return linkProc('ttrw');
+	});
+	// 時刻表-停留所名称検索 画面へ
+	$('.func_timetable_searchstop').click(function(e) {
+		return linkProc('ttss');
+	});
+	// 時刻表-深夜バス 画面へ
+	$('.func_timetable_nightbus').click(function(e) {
+		return linkProc('ttni');
+	});
+	
+	// 音声読み上げ対応 車両接近情報-五十音選択 画面へ
+	$('.func_tr_approach_syllable').click(function(e) {
+		return linkProc('txtapsy');
+	});
+	// 音声読み上げ対応 車両接近情報-鉄道駅選択 画面へ
+	$('.func_tr_approach_railway').click(function(e) {
+		return linkProc('txtaprw');
+	});
+	// 音声読み上げ対応 時刻表-五十音選択 画面へ
+	$('.func_tr_timetable_syllable').click(function(e) {
+		return linkProc('txtttsy');
+	});
+	// 音声読み上げ対応 時刻表-鉄道駅選択 画面へ
+	$('.func_tr_timetable_railway').click(function(e) {
+		return linkProc('txtttrw');
+	});
+	// 音声読み上げ対応 運行系統案内　系統選択 画面へ
+	$('.func_tr_serviceroute_select').click(function(e) {
+		return linkProc('txtsrsl');
+	});
+	// 音声読み上げ対応 運行系統案内　五十音順選択 画面へ
+	$('.func_tr_serviceroute_syllable').click(function(e) {
+		return linkProc('txtsrsy');
+	});
+	// 音声読み上げ対応 運行系統案内　鉄道駅選択 画面へ
+	$('.func_tr_serviceroute_railway').click(function(e) {
+		return linkProc('txtsrrw');
+	});
+	
+
+	// 都営交通経路検索(MP) 画面へ
+	$('.func_searchroute_mp').click(function(e) {
+/* 2015/03/12 CNC@JINHW Delete Start ---------------------------------------------------------------------*/
+		//alert("臨時対応のため、一部制限があります。");
+/* 2015/03/12 CNC@JINHW Delete End -----------------------------------------------------------------------*/
+		return window.open("navim?LCD=&VCD=ctop&ECD=srrtm");
+	});
+	// 音声読み上げ対応 画面へ
+	$('.func_textreader').attr({
+		href : "navi?LCD=&VCD=cresultttbl&ECD=txtrd"
+	});
+	// アンケート 画面へ
+	$('.func_questionnaire').attr({
+		href : "navi?LCD=&VCD=cresultttbl&ECD=qtnre"
+	});
+	// 利用方法 画面へ
+	$('.func_usage').attr({
+		href : "navi?LCD=&VCD=cresultttbl&ECD=ug"
+	});
+	// 免責事項 画面へ
+	$('.func_notice').attr({
+		href : "navi?LCD=&VCD=cresultttbl&ECD=nc"
+	});
+	// お問合せ 画面へ
+	$('.func_inquiry').attr({
+		href : "http://www.kotsu.metro.tokyo.jp/enq/index.html"
+	});
+	// 携帯のInformation 画面へ
+	$('.func_information').attr({
+		href : "https://tobus.jp/blsys/navim" + "?LCD=&VCD=usage&ECD=upinfo"
+	});
+	// その他のリンク 画面へ
+	$('.func_otherlinks').attr({
+		href : "navi?LCD=&VCD=cresultttbl&ECD=otherlinks"
+	});
+	// 都営バスの路線図（みんくるガイド） 画面へ
+	$('.func_kotsumetrotokyo_map').attr({
+		href : "http://www.kotsu.metro.tokyo.jp/bus/map/"
+	});
+	// 都営交通の詳しいエリア 画面へ
+	$('.func_kotsumetrotokyo').attr({
+		href : "http://www.kotsu.metro.tokyo.jp"
+	});
+	// サイトマップへ @cii
+	$('.func_sitemap').click(function(e) {
+		return linkProc('smap');
+	});
+	// アクセシビリティへ @cii
+	$('.func_accessibility').attr({
+		 href: "navi?LCD=&VCD=cresultttbl&ECD=acpo"
+	});
+	/*
+	// アクセシビリティへ @cii
+	$('.func_accessibility').click(function(e) {
+		var target = 'navi?LCD=&VCD=cresultttbl&ECD=acpo';
+		alert(target);
+		location.href=target;
+	});
+	*/
+
+	var popwin_profiles = {
+			// アンケート
+			pop_questionnaire : {
+				height:800,
+				width:820,
+				center:1
+			},
+			// 利用方法
+			pop_usage : {
+				height:800,
+				width:800,
+				center:1
+			},
+			// 免責事項
+			pop_notice : {
+				height:750,
+				width:800,
+				center:1
+			},
+			// お問合せ
+			pop_info : {
+				height:800,
+				width:820,
+				center:1
+			},
+
+			// 運行系統図
+			pop_serviceroutepic : {
+				height:800,
+				width:820,
+				center:1
+			},
+			// 運行ルート地図
+			pop_mapserviceroute : {
+				height:800,
+				width:820,
+				center:1
+			},
+			// 凡例
+			pop_legend : {
+				height:800,
+				width:820,
+				center:1
+			},
+			// 車両運行状況
+			pop_busserviceinfo : {
+				height:800,
+				width:820,
+				center:1
+			},
+			// ラッピングバス情報
+			pop_wrappingbusinfo : {
+				height:800,
+				width:820,
+				center:1
+			},
+			// 前後出発
+			pop_beforeafter : {
+				height:800,
+				width:820,
+				center:1
+			},
+			// 地図地点
+			pop_mappoint : {
+				height:800,
+				width:820,
+				center:1
+			},
+			// 地図経路
+			pop_maproute : {
+				height:800,
+				width:820,
+				center:1
+			},
+			// アクセシビリティ @cii
+			pop_accessibility : {
+				height:750,
+				width:800,
+				center:1
+			}
+	};
+	$(".popupwindow").popupwindow( popwin_profiles );
+});
+
+/**
+ * 遷移処理
+ * @param eventID イベントID
+ * @return false
+ */
+function linkProc(eventCode) {
+	// サブミット処理
+	return linkSubmit("cresultttbl", eventCode);
+}
+
+window.onload = function() {};
+window.onunload = function() {};
+
+//-->
+</script>
+
+
+<script language="JavaScript" type="text/javascript">
+<!--
+
+$(function() {
+
+  $(".func_direction").click(function(e) {
+    var stoppoleid = $(this).attr("id").substr(1);
+    $("#selectstoppole").val(stoppoleid);
+    linkProc("direction");
+  });
+
+  $(".func_revised").click(function(e) {
+    var stoppoleid = $(this).attr("id").substr(1);
+    $("#selectstoppole").val(stoppoleid);
+    linkProc("revised");
+  });
+
+  $('.func_print').attr({
+    href : "navi?VCD=cresultttbl&ECD=showprint&LCD=&slst=325&pl=1&RTMCD=181&DT=20260401&tgo=2"
+  });
+
+//  $('.submit_form').keypress(function(e) {
+//      if ((e.which && e.which === 13) || (e.keyCode && e.keyCode === 13)) {
+//          return false;
+//      } else {
+//          return true;
+//      }
+//  });
+
+});
+
+/**
+ * 遷移処理 他の時刻表
+ * @param stopCode
+ * @param poleNo
+ * @param routeCode
+ * @param revDate
+ * @return false
+ */
+function linkOtherStopPole(revDate, poleno, tgo) {
+  $("#dispDiv").val(1);
+  $("#revDate").val(revDate);
+  $("#poleNo").val(poleno);
+  $("#tgo").val(tgo);
+  return linkSubmit("cresultttbl", "show");
+}
+
+/**
+ * 遷移処理 他の改正日
+ * 2018/03/28 改正後の時刻表リンクの不具合対応
+ * @param stopCode
+ * @param poleNo
+ * @param routeCode
+ * @param revDate
+ * @param tgo 時刻表グループ番号
+ * @return false
+ */
+function linkOtherDateLink(stopCode, poleNo, routeCode, revDate, dispDiv, isNow, tgo) {
+  $("#dispDiv").val(dispDiv);
+  $("#stopCode").val(stopCode);
+  $("#poleNo").val(poleNo);
+  $("#routeCode").val(routeCode);
+  $("#revDate").val(revDate);
+  $("#office").val(0);
+  if (!isNow) {
+    // 改正時刻表へ
+    $("#lrflag").val(0);
+    $("#tgo").val(tgo);
+    return linkSubmit("cresultttbl", "show");
+  }
+  else {
+    // 現行時刻表へ
+    $("#tgo").val(tgo);
+    return linkSubmit("SelectDest", "SelectDest");
+  }
+}
+
+/**
+ * 遷移処理 方面別
+ * @param stopCode
+ * @param poleNo
+ * @param routeCode
+ * @param revDate
+ * @return false
+ */
+function linkMergeLink(mergeKey, poleKey, dayDiv) {
+  $("#dispDiv").val(3);
+  $("#dayDiv").val(dayDiv);
+  $("#destinationKey").val(mergeKey);
+  $("#poleKey").val(poleKey);
+  return linkSubmit("cresultttbl", "chgdispdiv");
+}
+
+/**
+ * 遷移処理 接近情報
+ * @param stopCode
+ * @param poleNo
+ * @param routeCode
+ * @param revDate
+ * @return false
+ */
+function linkApproach() {
+  return linkSubmit("cresultttbl", "approach");
+}
+
+/**
+ * 遷移処理 運行状況
+ * @param stopCode
+ * @param poleNo
+ * @param routeCode
+ * @param revDate
+ * @return false
+ */
+function linkRoute(office, routetopCode) {
+  $("#routeCode").val(routetopCode);
+  $("#office").val(office);
+  return linkSubmit("cresultttbl", "rtsrvc");
+}
+
+ 
+/**
+ * 運行ダイヤの表示、非表示を切り替える
+ */
+function showhide(id) {
+  var obj = document.getElementById(id);
+  obj.style.display = obj.style.display == 'block' ? 'none' : 'block';
+}
+
+
+//-->
+</script>
+
+</head>
+
+
+<body id="">
+<a id="top"></a>
+
+<div id="wrapper">
+
+<!-- //========== header ========== -->
+
+
+
+
+
+<p class="skip"><a href="#container" title="本文へ移動します">本文へ移動</a></p>
+
+<div id="header">
+<div id="headerInner" class="clearfix">
+
+
+
+
+
+<a href="http://www.kotsu.metro.tokyo.jp" title="東京都交通局" target="_blank"><img src="pc/common/images/header/header_kyokulog.png"  alt="東京都交通局" class="logo_k" /></a>
+<a href="https://tobus.jp/blsys/navi" title="都バス運行情報サービス"><img src="pc/common/images/header/header_logo.gif" width="200" height="41" alt="都バス運行情報サービス" class="logo" /></a>
+
+<div class="headerRight">
+
+
+
+<!-- / fontChange -->
+<div id="fontChange">
+<p class="ds-none">文字サイズ変更</p>
+<ul id="fontSize">
+<li><img src="pc/common/images/header/font_s.gif" alt="フォント小" class="changeBtn" /></li>
+<li><img src="pc/common/images/header/font_m.gif" alt="フォント中" class="changeBtn" /></li>
+<li><img src="pc/common/images/header/font_l.gif" alt="フォント大" class="changeBtn" /></li>
+</ul>
+</div>
+<!-- fontChange / -->
+
+
+
+<!-- / outsideLink -->
+<ul class="outsideLink">
+
+	
+	<li class="link01"><a href="javascript:void(0);" class="a_global">English</a></li>
+
+
+<li class="link04"><a href="javascript:void(0);" class="func_otherlinks popupwindow" rel="pop_otherlinks" >その他</a></li>
+
+<li class="link02"><a href="http://www.kotsu.metro.tokyo.jp/" target="_blank">東京都交通局</a></li>
+<li class="link03"><a href="http://www.metro.tokyo.lg.jp/" target="_blank">東京都公式ホームページ</a></li>
+</ul>
+<!-- outsideLink / -->
+
+
+
+<ul class="assistNavi">
+<li><a href="javascript:void(0);" class="func_sitemap">サイトマップ</a></li>
+<li><a href="javascript:void(0);" class="func_usage popupwindow" rel="pop_usage">ご利用方法</a></li>
+<li><a href="javascript:void(0);" class="func_textreader">音声読み上げ対応</a></li>
+<li><a class="tipmenu-head" rel="#tipmenu_timetable" title="時刻表">時刻表</a></li>
+<!--li><a href="javascript:void(0);" class="func_information" target="_blank">更新情報</a></li-->
+</ul>
+
+</div>
+
+<div id="tipmenu_timetable">
+<ul>
+	<li><a href="javascript:void(0);" title="五十音選択" class="func_timetable_syllable">五十音選択</a></li>
+	<li><a href="javascript:void(0);" title="鉄道駅選択" class="func_timetable_railway">鉄道駅選択</a></li>
+	<li><a href="javascript:void(0);" title="停留所名称検索" class="func_timetable_searchstop">停留所名称検索</a></li>
+	<li><a href="javascript:void(0);" title="深夜バス" class="func_timetable_nightbus">深夜バス</a></li>
+</ul>
+</div>
+
+<noscript style="color: red; font-size: 2.5em; text-align: center; display: block; text-decoration:blink;">ブラウザのJavaScript設定を有効にしてご覧ください。</noscript>
+
+<!-- / globalNavi -->
+<ul class="globalNavi dropdown">
+<li class="navi01 func_top"><a href="javascript:void(0);" title="都バス運行情報サービス">ホーム</a></li>
+<li class="navi02 func_routeserviceinfo"><a href="javascript:void(0);" title="系統運行状況">系統運行状況</a></li>
+<li class="navi03 dropdown"><a class="pointcur" title="車両接近情報">車両接近情報</a>
+<ul class="sub_menu">
+<li><a href="javascript:void(0);" title="五十音選択" class="func_approach_syllable">五十音選択</a></li>
+<li><a href="javascript:void(0);" title="鉄道駅選択" class="func_approach_railway">鉄道駅選択</a></li>
+<li><a href="javascript:void(0);" title="停留所名称検索" class="func_approach_searchstop">停留所名称検索</a></li>
+</ul></li>
+<li class="navi04 dropdown"><a class="pointcur" title="都営交通経路検索">都営交通経路検索</a>
+<ul class="sub_menu">
+<li><a href="javascript:void(0);" title="地図から検索" class="func_searchroute">地図から検索</a></li>
+<li><a href="javascript:void(0);" title="停留所名称から検索" class="func_searchroute_mp">停留所名称から検索</a></li>
+</ul></li>
+<li class="navi05 dropdown" ><a class="pointcur" title="車両検索">車両検索</a>
+<ul class="sub_menu">
+<li><a href="javascript:void(0);" title="ラッピング検索" class="func_search_wrappingbus">ラッピング検索</a></li>
+
+<li><a href="javascript:void(0);" title="車種検索" class="func_search_model">車種検索</a></li>
+
+</ul></li>
+<li class="navi06 func_searchstop"><a href="javascript:void(0);" title="停留所地図検索">停留所地図検索</a></li>
+<li class="navi07"><a href="javascript:void(0);" class="a_araden" title="都電荒川線情報">都電荒川線情報</a></li>
+</ul><!-- globalNavi / -->
+
+</div></div>
+
+<!-- ========== header ==========// -->
+
+<!-- //========== container ========== -->
+<div id="container" class="clearfix">
+
+<div class="titleTimetbl">
+  
+    <h1><img src="pc/images/timetable/title_timetbl.gif" alt="時刻表" width="83" height="23" /></h1>
+    <p>時刻表を表示します。</p>
+  
+</div>
+
+<form action="https://tobus.jp/blsys/navi" name="SubmitForm" class="submit_form" method="get">
+  <input type="hidden" id="viewCode" name="VCD" value="cresultttbl"/>
+  <input type="hidden" id="eventCode" name="ECD" value=""/>
+  <input type="hidden" name="LCD" value="" />
+  <input type="hidden" id="stopCode" name="slst" value="325"/>              <!-- 停留所コード -->
+  <input type="hidden" id="poleNo" name="pl" value="1"/>                 <!-- 標柱番号 -->
+  <input type="hidden" id="routeCode" name="RTMCD" value="181"/>       <!-- 系統トップコード -->
+  <input type="hidden" id="dayDiv" name="DYDIV" value="2"/>        <!-- 曜日区分コード -->
+  <input type="hidden" id="dispDiv" name="DSDIV" value="1"/>      <!-- 表示時刻表区分 -->
+  <input type="hidden" id="revDate" name="DT" value="20260401"/>   <!-- 改正日(yyyymmdd) -->
+  <input type="hidden" id="office" name="OFFC" value="20"/>        <!-- 営業所キー -->
+  <input type="hidden" id="poleKey" name="plky" value="846"/>    <!-- 標柱キー -->
+  <input type="hidden" id="routeKey" name="RTMKY" value="1184"/>  <!-- 系統トップキー -->
+  <input type="hidden" id="destinationKey" name="DSTKEY" value="0"/>     <!-- 方面キー -->
+  <input type="hidden" id="lrflag" name="lrid" value="2"/>     <!-- 左右区分 -->
+  <input type="hidden" id="tgo" name="tgo" value="2"/>      <!-- 時刻表グループ番号 -->
+
+<h2 class=titletimeTbl2>勝どき橋南詰<span class="yomi">（かちどきばしみなみづめ）</span></h2>
+<!-- テロップ (緊急)-->
+
+    
+  <div id="telop" class="telopbox2">
+        
+	        <div class="telopline2" ><font color=#FF0000>台風２４号の影響に伴う大雨により、都営地下鉄、日暮里・舎人ライナー、東京さくらトラム(都電荒川線)、</font> <font color=#FF0000>都営バスにおいて遅延や運行本数の減少、運行の見合わせが発生する可能性があります。</font> <font color=#FF0000>今後の気象情報、運行情報にご注意ください。</font></div>
+	        
+  </div>
+      
+
+<!-- /テロップ -->
+
+
+
+
+        <p class="mt-5 ml-10 mr-10">本日は、<a href="javascript:void(0);" onclick="document.getElementById('土曜').scrollIntoView();">土曜ダイヤ</a>で運行しております。</p>
+
+
+  
+    <p class="mt-5 ml-10 mr-10">乗車予定日のダイヤは<a href="javascript:showhide('dianame')">こちら</a>。</p>
+  
+    <div id="dianame" style="display: none" class="mt-5 ml-10 mr-10">
+      <ul>
+        
+        <li>
+          <table style="margin-left: 10px" cellspacing="0" cellpadding="0">
+            <tr>
+              <td id="td_0">9/6(日)</td>
+              <td>:</td>
+            
+              <td>&nbsp;<a href="javascript:void(0);" onclick="document.getElementById('休日').scrollIntoView();">休日ダイヤ</a></td>
+            
+            </tr>
+          </table>
+        </li>
+        
+        
+        <li>
+          <table style="margin-left: 10px" cellspacing="0" cellpadding="0">
+            <tr>
+              <td id="td_1">9/7(月)</td>
+              <td>:</td>
+            
+              <td>&nbsp;<a href="javascript:void(0);" onclick="document.getElementById('平日').scrollIntoView();">平日ダイヤ</a></td>
+            
+            </tr>
+          </table>
+        </li>
+        
+        
+        <li>
+          <table style="margin-left: 10px" cellspacing="0" cellpadding="0">
+            <tr>
+              <td id="td_2">9/8(火)</td>
+              <td>:</td>
+            
+              <td>&nbsp;<a href="javascript:void(0);" onclick="document.getElementById('平日').scrollIntoView();">平日ダイヤ</a></td>
+            
+            </tr>
+          </table>
+        </li>
+        
+        
+        <li>
+          <table style="margin-left: 10px" cellspacing="0" cellpadding="0">
+            <tr>
+              <td id="td_3">9/9(水)</td>
+              <td>:</td>
+            
+              <td>&nbsp;<a href="javascript:void(0);" onclick="document.getElementById('平日').scrollIntoView();">平日ダイヤ</a></td>
+            
+            </tr>
+          </table>
+        </li>
+        
+        
+        <li>
+          <table style="margin-left: 10px" cellspacing="0" cellpadding="0">
+            <tr>
+              <td id="td_4">9/10(木)</td>
+              <td>:</td>
+            
+              <td>&nbsp;<a href="javascript:void(0);" onclick="document.getElementById('平日').scrollIntoView();">平日ダイヤ</a></td>
+            
+            </tr>
+          </table>
+        </li>
+        
+        
+        <li>
+          <table style="margin-left: 10px" cellspacing="0" cellpadding="0">
+            <tr>
+              <td id="td_5">9/11(金)</td>
+              <td>:</td>
+            
+              <td>&nbsp;<a href="javascript:void(0);" onclick="document.getElementById('平日').scrollIntoView();">平日ダイヤ</a></td>
+            
+            </tr>
+          </table>
+        </li>
+        
+        
+        <li>
+          <table style="margin-left: 10px" cellspacing="0" cellpadding="0">
+            <tr>
+              <td id="td_6">9/12(土)</td>
+              <td>:</td>
+            
+              <td>&nbsp;<a href="javascript:void(0);" onclick="document.getElementById('土曜').scrollIntoView();">土曜ダイヤ</a></td>
+            
+            </tr>
+          </table>
+        </li>
+        
+        
+      </ul>
+      <input type="hidden" id="td_count" value="7" />
+      <input type="hidden" id="timelength" value="4" />
+    </div>
+
+
+
+
+
+
+  <table id="平日" border="1"><tr><th>6</th><td><span></span>50</td></tr></table>
+  <table id="土曜" border="1"><tr><th>6</th><td><span></span>53</td></tr></table>
+  <table id="休日" border="1"><tr><th>7</th><td><span></span>01</td></tr></table>
+</form></div></body></html>

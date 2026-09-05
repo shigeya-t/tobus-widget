@@ -404,6 +404,11 @@ enum TobusPageParser {
     /// 時刻表の表として想定しているID。これ以外のテーブル（案内文の枠など）は読み飛ばす。
     private static let scheduleKinds: Set<String> = ["平日", "土曜", "休日"]
 
+    /// 時刻表ページの hidden `DYDIV`（曜日区分コード）。「本日は〇曜ダイヤ」の文言と同じ値。
+    /// 1=平日、2=土曜、3=休日（`timetable_direct_gyo10.html` の休日申告は `value="3"`、
+    /// 2026-09-05 の都０５－２は土曜申告で `value="2"`）。
+    private static let dayDivKinds: [String: String] = ["1": "平日", "2": "土曜", "3": "休日"]
+
     /// 「時」の見出し行＋分のセル、という構造から時刻を組み立てる。
     private static func times(inTable table: Element) throws -> [BusTime] {
         var times: [BusTime] = []
@@ -465,16 +470,33 @@ enum TobusPageParser {
 
     /// 「本日は、<a onclick="document.getElementById('土曜').scrollIntoView();">土曜ダイヤ</a>で運行しております。」
     /// のリンクから、本日のダイヤに対応する表のIDを取り出す。
+    ///
+    /// **「本日は」で始まる親を持つリンクを文書全体から拾ってはいけない。**
+    /// `<a>` が `<span>` で包まれていると親テキストは「土曜ダイヤ」だけになり、そのリンクを
+    /// スキップしたあと、同じ段落に巻き込まれた乗車予定日の「平日ダイヤ」を本日と誤る。
+    /// 段落内のリンクだけを見る。無ければ hidden `DYDIV` にフォールバックする。
     private static func todayScheduleTableId(doc: Document) throws -> String? {
-        for anchor in try doc.select("a").array() {
-            let onclick = try anchor.attr("onclick")
-            guard onclick.contains("getElementById") else { continue }
-            guard let parentText = try anchor.parent()?.text(), parentText.hasPrefix("本日は") else { continue }
-            if let id = firstStringMatch(in: onclick, pattern: #"getElementById\('([^']+)'\)"#) {
+        if let kind = try declaredTodayKind(doc: doc) { return kind }
+        return try dayDivKind(doc: doc)
+    }
+
+    private static func declaredTodayKind(doc: Document) throws -> String? {
+        for paragraph in try doc.select("p").array() {
+            guard try paragraph.text().hasPrefix("本日は") else { continue }
+            for anchor in try paragraph.select("a").array() {
+                let onclick = try anchor.attr("onclick")
+                guard let id = firstStringMatch(in: onclick, pattern: #"getElementById\('([^']+)'\)"#),
+                      Self.scheduleKinds.contains(id)
+                else { continue }
                 return id
             }
         }
         return nil
+    }
+
+    private static func dayDivKind(doc: Document) throws -> String? {
+        guard let value = try doc.select("#dayDiv").first()?.attr("value") else { return nil }
+        return Self.dayDivKinds[value]
     }
 
     /// 「乗車予定日のダイヤはこちら」に並ぶ、翌日から最大7日分の区分。
