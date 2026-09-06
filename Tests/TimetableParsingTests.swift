@@ -103,6 +103,33 @@ final class TimetableParsingTests: XCTestCase {
         XCTAssertEqual(parsed.upcomingKinds.count, 7)
     }
 
+    /// 都０１の実ページ（日曜）。「本日は休日ダイヤ」。乗車予定日は翌日からで、
+    /// 一覧の土曜（翌週）を本日と取り違えてはいけない。
+    func testSundayTimetableDeclaresHolidayKind() throws {
+        let parsed = try TobusPageParser.parseTimetable(
+            html: try fixture("timetable_t01_sunday"),
+            now: date(9, 6)
+        )
+        XCTAssertEqual(parsed.todayKind, "休日")
+        XCTAssertEqual(parsed.fetchedOnDay, "2026-09-06")
+        XCTAssertNil(parsed.upcomingKinds["2026-09-06"], "本日は乗車予定日一覧に含まれない")
+        XCTAssertEqual(parsed.upcomingKinds["2026-09-07"], "平日")
+        XCTAssertEqual(parsed.upcomingKinds["2026-09-12"], "土曜")
+        XCTAssertEqual(parsed.upcomingKinds["2026-09-13"], "休日")
+    }
+
+    /// hidden DYDIV が土曜のままでも、「本日は休日」の文言を優先する。
+    func testTodayParagraphWinsOverStaleDayDiv() throws {
+        let html = """
+        <input type="hidden" id="dayDiv" name="DYDIV" value="2"/>
+        <p>本日は、<a onclick="document.getElementById('休日').scrollIntoView();">休日ダイヤ</a>で運行しております。</p>
+        <table id="休日"><tr><th>7</th><td>01</td></tr></table>
+        <table id="土曜"><tr><th>6</th><td>53</td></tr></table>
+        """
+        let parsed = try TobusPageParser.parseTimetable(html: html, now: date(9, 6))
+        XCTAssertEqual(parsed.todayKind, "休日", "DYDIV の土曜より本日申告を使う")
+    }
+
     /// 都０５－２の実ページ（土曜）。「本日は土曜ダイヤ」なのに、親テキストが「本日は」で
     /// 始まるリンクを文書全体から拾うと、乗車予定日の平日を本日と誤ることがある。
     func testSaturdayTo05_2DeclaresSaturdayKind() throws {
