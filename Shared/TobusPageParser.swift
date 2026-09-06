@@ -394,7 +394,7 @@ enum TobusPageParser {
 
         return ParsedTimetable(
             tables: tables,
-            todayKind: try todayScheduleTableId(doc: doc),
+            todayKind: try todayScheduleTableId(html: html, doc: doc),
             legend: try parseLegend(doc: doc),
             fetchedOnDay: TobusConfig.calendarDayString(from: now),
             upcomingKinds: try upcomingScheduleKinds(doc: doc, now: now)
@@ -471,18 +471,27 @@ enum TobusPageParser {
     /// 「本日は、<a onclick="document.getElementById('土曜').scrollIntoView();">土曜ダイヤ</a>で運行しております。」
     /// のリンクから、本日のダイヤに対応する表のIDを取り出す。
     ///
-    /// **「本日は」で始まる親を持つリンクを文書全体から拾ってはいけない。**
-    /// `<a>` が `<span>` で包まれていると親テキストは「土曜ダイヤ」だけになり、そのリンクを
-    /// スキップしたあと、同じ段落に巻き込まれた乗車予定日の「平日ダイヤ」を本日と誤る。
-    /// 段落内のリンクだけを見る。無ければ hidden `DYDIV` にフォールバックする。
-    private static func todayScheduleTableId(doc: Document) throws -> String? {
+    /// 先に HTML 文字列から「本日は」の直後のリンクを読む。DOM の親テキストに頼ると、
+    /// 空白や包み込みで本日の休日を取りこぼし、hidden `DYDIV`（表示中の表）の土曜が残ることがある。
+    /// DOM の段落内リンク、`DYDIV` の順でフォールバックする。
+    private static func todayScheduleTableId(html: String, doc: Document) throws -> String? {
+        if let kind = declaredTodayKindFromHTML(html) { return kind }
         if let kind = try declaredTodayKind(doc: doc) { return kind }
         return try dayDivKind(doc: doc)
     }
 
+    /// `本日は、<a ... getElementById('休日')>` を、DOM を介さず取る。
+    private static func declaredTodayKindFromHTML(_ html: String) -> String? {
+        firstStringMatch(
+            in: html,
+            pattern: #"本日は[、,]?\s*<a[^>]*getElementById\('(平日|土曜|休日)'\)"#
+        )
+    }
+
     private static func declaredTodayKind(doc: Document) throws -> String? {
         for paragraph in try doc.select("p").array() {
-            guard try paragraph.text().hasPrefix("本日は") else { continue }
+            let text = try paragraph.text().trimmingCharacters(in: .whitespacesAndNewlines)
+            guard text.hasPrefix("本日は") else { continue }
             for anchor in try paragraph.select("a").array() {
                 let onclick = try anchor.attr("onclick")
                 guard let id = firstStringMatch(in: onclick, pattern: #"getElementById\('([^']+)'\)"#),
