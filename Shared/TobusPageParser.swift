@@ -111,6 +111,16 @@ struct ParsedTimetable: Equatable {
         return TobusConfig.estimatedScheduleKind(on: date)
     }
 
+    /// 日次キャッシュをそのまま使ってよいか。
+    ///
+    /// 表の中身は日中変わらないが、`todayKind` は日付変更直後の古いページを掴むと
+    /// 日曜の休日のまま月曜いっぱい残る。曜日推定と食い違うときは再取得する。
+    /// 祝日は再取得後も食い違うので、呼び出し側は再取得済みなら再利用する。
+    func shouldReuseAsDailyCache(alreadyRevalidated: Bool, now: Date = Date()) -> Bool {
+        if alreadyRevalidated { return true }
+        return scheduleKind(on: now) == TobusConfig.estimatedScheduleKind(on: now)
+    }
+
     /// 表示中の定刻に出てくる記号だけの凡例。ウィジェットなど幅が無い面向け。
     /// 無印は系統の行き先そのものなので含めない（時刻にも記号が付いていない）。
     func legend(appearingIn departures: [ScheduledDeparture]) -> [TimetableMark] {

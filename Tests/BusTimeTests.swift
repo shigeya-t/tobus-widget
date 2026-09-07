@@ -211,6 +211,26 @@ final class ScheduleKindTests: XCTestCase {
         XCTAssertEqual(calendar.component(.minute, from: next!), 0)
     }
 
+    /// 月曜なのに休日申告が残っているキャッシュは、祝日の可能性があるので捨てて取り直す。
+    func testDoesNotReuseHolidayKindOnWeekdayUntilRevalidated() {
+        let stale = ParsedTimetable(
+            tables: ["平日": [BusTime(hour: 6, minute: 50)], "休日": [BusTime(hour: 7, minute: 1)]],
+            todayKind: "休日",
+            fetchedOnDay: "2026-09-07"
+        )
+        XCTAssertFalse(stale.shouldReuseAsDailyCache(alreadyRevalidated: false, now: date(9, 7)))
+        XCTAssertTrue(stale.shouldReuseAsDailyCache(alreadyRevalidated: true, now: date(9, 7)), "祝日は再取得後の申告を当日使う")
+    }
+
+    func testReusesWeekdayKindThatMatchesEstimate() {
+        let fresh = ParsedTimetable(
+            tables: ["平日": [BusTime(hour: 6, minute: 50)]],
+            todayKind: "平日",
+            fetchedOnDay: "2026-09-07"
+        )
+        XCTAssertTrue(fresh.shouldReuseAsDailyCache(alreadyRevalidated: false, now: date(9, 7)))
+    }
+
     /// 本日分は tobus.jp の申告どおり、翌日分は推定と分かる見出しにする。
     func testHeadingDistinguishesNextDay() {
         XCTAssertEqual(TobusConfig.scheduleHeading(kind: "休日"), "定刻（休日ダイヤ）")

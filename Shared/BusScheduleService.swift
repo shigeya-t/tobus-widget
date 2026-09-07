@@ -17,8 +17,9 @@ enum BusScheduleError: LocalizedError {
 /// 静的時刻表（「定刻」）の取得。
 ///
 /// 車両接近情報ページ内の「時刻表」リンクを2段階たどって取得する
-/// （行き先選択ページ → 実際の時刻表ページ）。時刻表は日をまたがない限り変わらないため、
-/// 系統ごとに1日1回だけ取得すれば十分。
+/// （行き先選択ページ → 実際の時刻表ページ）。表の中身は日をまたがない限り変わらないため、
+/// 系統ごとに1日1回取得するのが基本。ただし日付変更直後の古い「本日は休日」を
+/// 月曜まで残さないよう、曜日推定と申告が食い違うときはその日もう1回だけ取り直す。
 enum BusScheduleService {
     private static let cache = ScheduleCache()
 
@@ -82,6 +83,8 @@ enum BusScheduleService {
 
 private actor ScheduleCache {
     private var entries: [String: (timetable: ParsedTimetable, day: Date)] = [:]
+    /// 曜日推定と食い違う申告を、当日すでに取り直した系統。
+    private var revalidated: Set<String> = []
 
     private var today: Date {
         var calendar = Calendar(identifier: .gregorian)
@@ -91,11 +94,20 @@ private actor ScheduleCache {
 
     func value(for key: String) -> ParsedTimetable? {
         guard let entry = entries[key], entry.day == today else { return nil }
+        guard entry.timetable.shouldReuseAsDailyCache(alreadyRevalidated: revalidated.contains(key)) else {
+            return nil
+        }
         return entry.timetable
     }
 
     func store(_ timetable: ParsedTimetable, for key: String) {
+        let isRetrySameDay = entries[key]?.day == today
         entries[key] = (timetable, today)
+        if isRetrySameDay || timetable.shouldReuseAsDailyCache(alreadyRevalidated: false) {
+            revalidated.insert(key)
+        } else {
+            revalidated.remove(key)
+        }
         failures.removeValue(forKey: key)
     }
 

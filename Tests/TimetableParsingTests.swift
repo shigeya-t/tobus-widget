@@ -103,6 +103,29 @@ final class TimetableParsingTests: XCTestCase {
         XCTAssertEqual(parsed.upcomingKinds.count, 7)
     }
 
+    /// 都０１の実ページ（月曜）。「本日は平日ダイヤ」。乗車予定日の日曜（休日）を
+    /// 本日と取り違えてはいけない。
+    func testMondayTimetableDeclaresWeekdayKind() throws {
+        let parsed = try TobusPageParser.parseTimetable(
+            html: try fixture("timetable_t01_monday"),
+            now: date(9, 7)
+        )
+        XCTAssertEqual(parsed.todayKind, "平日")
+        XCTAssertEqual(parsed.fetchedOnDay, "2026-09-07")
+        XCTAssertNil(parsed.upcomingKinds["2026-09-07"], "本日は乗車予定日一覧に含まれない")
+        XCTAssertEqual(parsed.upcomingKinds["2026-09-08"], "平日")
+        XCTAssertEqual(parsed.upcomingKinds["2026-09-13"], "休日")
+        XCTAssertNotEqual(parsed.todayKind, "休日", "乗車予定日の休日を本日にしてはいけない")
+        // フィクスチャの平日表は 6:34 だけなので、始発前で本日分が残っていることを見る。
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TobusConfig.timeZone
+        var c = DateComponents()
+        (c.year, c.month, c.day, c.hour, c.minute) = (2026, 9, 7, 6, 0)
+        let upcoming = parsed.upcoming(now: calendar.date(from: c)!)
+        XCTAssertEqual(upcoming.kind, "平日")
+        XCTAssertFalse(upcoming.isNextDay)
+    }
+
     /// 都０１の実ページ（日曜）。「本日は休日ダイヤ」。乗車予定日は翌日からで、
     /// 一覧の土曜（翌週）を本日と取り違えてはいけない。
     func testSundayTimetableDeclaresHolidayKind() throws {
