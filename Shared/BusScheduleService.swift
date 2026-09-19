@@ -93,8 +93,18 @@ private actor ScheduleCache {
     }
 
     func value(for key: String) -> ParsedTimetable? {
-        guard let entry = entries[key], entry.day == today else { return nil }
-        guard entry.timetable.shouldReuseAsDailyCache(alreadyRevalidated: revalidated.contains(key)) else {
+        guard let entry = entries[key] else { return nil }
+        let now = Date()
+        if TobusConfig.isBeforeScheduleBannerTrustHour(now) {
+            if entry.day == today { return entry.timetable }
+            // 表の中身は日をまたいでも同じ。乗車予定日の申告があれば、早朝の
+            // 「本日は土曜」取り直しより、昨日取った「日曜は休日」を残す。
+            let todayKey = TobusConfig.calendarDayString(from: now)
+            if entry.timetable.upcomingKinds[todayKey] != nil { return entry.timetable }
+            return nil
+        }
+        guard entry.day == today else { return nil }
+        guard entry.timetable.shouldReuseAsDailyCache(alreadyRevalidated: revalidated.contains(key), now: now) else {
             return nil
         }
         return entry.timetable
@@ -103,7 +113,11 @@ private actor ScheduleCache {
     func store(_ timetable: ParsedTimetable, for key: String) {
         let isRetrySameDay = entries[key]?.day == today
         entries[key] = (timetable, today)
-        if isRetrySameDay || timetable.shouldReuseAsDailyCache(alreadyRevalidated: false) {
+        if TobusConfig.isBeforeScheduleBannerTrustHour(Date()) {
+            // 日付変更直後の取得は「本日は」が前日のまま残っていることがある。
+            // ここで再取得済みにすると、朝になっても取り直さない。
+            revalidated.remove(key)
+        } else if isRetrySameDay || timetable.shouldReuseAsDailyCache(alreadyRevalidated: false) {
             revalidated.insert(key)
         } else {
             revalidated.remove(key)

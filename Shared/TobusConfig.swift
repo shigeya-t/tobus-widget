@@ -12,6 +12,17 @@ enum TobusConfig {
         return isNextDay ? "翌 \(kind)ダイヤ" : "定刻（\(kind)ダイヤ）"
     }
 
+    /// tobus.jp の「本日は〇曜ダイヤ」が、日付変更後もしばらく前日の区分のまま残ることがある。
+    /// 2026-09-20 日曜 1:22 の実ページは「本日は土曜ダイヤ」だった一方、乗車予定日一覧は
+    /// 9/21 始まりで、暦の今日は日曜に進んでいた。この時刻より前の申告は信用しない。
+    static let scheduleBannerTrustHour = 5
+
+    static func isBeforeScheduleBannerTrustHour(_ date: Date) -> Bool {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
+        return calendar.component(.hour, from: date) < scheduleBannerTrustHour
+    }
+
     /// 指定日のダイヤ区分を曜日から推定する（月〜金→平日、土→土曜、日→休日）。
     ///
     /// **ページの申告がある日にはこれを使ってはいけない。** tobus.jp は実際の運行区分を

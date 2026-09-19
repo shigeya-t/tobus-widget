@@ -187,12 +187,15 @@ enum AppSettings {
     /// 残すと、時刻表リンクを失った系統の古い表が消えずに残り、`upcoming(now:)` が
     /// それを今日の日付へ投影してしまう。取得日（`fetchedOnDay`）を保存してある場合は
     /// 金曜の平日申告を土曜へは適用しないが、空の表を残すと定刻そのものが消えない。
+    /// 日付変更直後の取得が前日の「乗車予定日」申告と食い違うときは前回値を残す
+    /// （日曜早朝の「本日は土曜」で、土曜に控えた日曜=休日を消さない）。
     static func saveSchedule(_ timetable: ParsedTimetable, routeID: String) {
         guard !timetable.tables.isEmpty else {
             defaults.removeObject(forKey: Keys.schedule(routeID))
             return
         }
-        guard let data = try? JSONEncoder().encode(timetable) else { return }
+        let toSave = timetable.replacingOvernightFetchIfNeeded(previous: schedule(routeID: routeID))
+        guard let data = try? JSONEncoder().encode(toSave) else { return }
         defaults.set(data, forKey: Keys.schedule(routeID))
     }
 

@@ -178,16 +178,99 @@ final class TimetableSelectionTests: XCTestCase {
         XCTAssertEqual(result.dates, [date(8, 17, 1, 10)])
         XCTAssertFalse(result.isNextDay, "本日のダイヤの便なので翌日扱いにはしない")
     }
+
+    // MARK: - 日付変更直後の「本日は土曜」名残
+
+    /// 日曜 1:22 に取り直したページが「本日は土曜」のままでも、土曜の始発を今日へ投影しない。
+    /// 2026-09-20 の実ページは乗車予定日が 9/21 始まりで、バナーだけ土曜が残っていた。
+    func testIgnoresStaleSaturdayBannerFetchedOnSundayBeforeDawn() {
+        let sunday = ParsedTimetable(
+            tables: timetable.tables,
+            todayKind: "土曜",
+            fetchedOnDay: "2026-09-20",
+            upcomingKinds: ["2026-09-21": "休日"]
+        )
+        let result = sunday.upcoming(now: date(9, 20, 1, 22))
+        XCTAssertEqual(result.kind, "休日")
+        XCTAssertFalse(result.isNextDay)
+        XCTAssertEqual(result.dates.first, date(9, 20, 7, 1), "休日ダイヤの始発")
+        XCTAssertNotEqual(result.dates.first, date(9, 20, 6, 30), "土曜ダイヤを日曜へ投影してはいけない")
+    }
+
+    /// お盆の土曜が休日ダイヤ、のような今日の特別運行は、前日推定と一致しないので残す。
+    func testKeepsObonHolidayBannerOnSaturdayBeforeDawn() {
+        let saturday = ParsedTimetable(
+            tables: timetable.tables,
+            todayKind: "休日",
+            fetchedOnDay: "2026-08-15",
+            upcomingKinds: ["2026-08-16": "休日"]
+        )
+        let result = saturday.upcoming(now: date(8, 15, 1, 22))
+        XCTAssertEqual(result.kind, "休日", "お盆の休日申告は前日の平日推定と一致しないので残す")
+        XCTAssertEqual(result.dates.first, date(8, 15, 7, 1))
+    }
+
+    /// 朝以降はページの申告を使う。日付変更直後の読み替えを昼まで続けない。
+    func testTrustsPageBannerAfterScheduleTrustHour() {
+        let sunday = ParsedTimetable(
+            tables: timetable.tables,
+            todayKind: "土曜",
+            fetchedOnDay: "2026-09-20"
+        )
+        let result = sunday.upcoming(now: date(9, 20, 10, 0))
+        XCTAssertEqual(result.kind, "土曜", "朝以降はページの申告を使う")
+    }
+
+    /// 前日ダイヤの 25 時台が残っているあいだはそれを出し、尽きたら本日の区分へ切替える。
+    func testShowsPreviousServiceDayLateNightBusAfterMidnightThenHoliday() {
+        let saturday = ParsedTimetable(
+            tables: [
+                "土曜": [BusTime(hour: 6, minute: 30), BusTime(hour: 25, minute: 10)],
+                "休日": [BusTime(hour: 7, minute: 1)],
+            ],
+            todayKind: "土曜",
+            fetchedOnDay: "2026-09-19",
+            upcomingKinds: ["2026-09-20": "休日"]
+        )
+        let stillRunning = saturday.upcoming(now: date(9, 20, 1, 0))
+        XCTAssertEqual(stillRunning.kind, "土曜")
+        XCTAssertEqual(stillRunning.dates, [date(9, 20, 1, 10)])
+        XCTAssertFalse(stillRunning.isNextDay, "前日ダイヤの深夜便なので翌日扱いにはしない")
+
+        let afterLast = saturday.upcoming(now: date(9, 20, 1, 22))
+        XCTAssertEqual(afterLast.kind, "休日")
+        XCTAssertEqual(afterLast.dates.first, date(9, 20, 7, 1))
+    }
+
+    /// 日曜早朝の取り直しで、土曜に控えた「9/20 休日」を消さない。
+    func testOvernightFetchDoesNotReplaceSaturdaysSundayForecast() {
+        let saturday = ParsedTimetable(
+            tables: timetable.tables,
+            todayKind: "土曜",
+            fetchedOnDay: "2026-09-19",
+            upcomingKinds: ["2026-09-20": "休日"]
+        )
+        let staleSunday = ParsedTimetable(
+            tables: timetable.tables,
+            todayKind: "土曜",
+            fetchedOnDay: "2026-09-20",
+            upcomingKinds: ["2026-09-21": "休日"]
+        )
+        let kept = staleSunday.replacingOvernightFetchIfNeeded(previous: saturday, now: date(9, 20, 1, 22))
+        XCTAssertEqual(kept.fetchedOnDay, "2026-09-19")
+        XCTAssertEqual(kept.upcomingKinds["2026-09-20"], "休日")
+        XCTAssertEqual(kept.upcoming(now: date(9, 20, 1, 22)).kind, "休日")
+    }
 }
 
 /// ダイヤ区分の推定と見出し。
 final class ScheduleKindTests: XCTestCase {
 
-    private func date(_ month: Int, _ day: Int) -> Date {
+    private func date(_ month: Int, _ day: Int, _ hour: Int = 12, _ minute: Int = 0) -> Date {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TobusConfig.timeZone
         var c = DateComponents()
-        (c.year, c.month, c.day, c.hour) = (2026, month, day, 12)
+        (c.year, c.month, c.day, c.hour, c.minute) = (2026, month, day, hour, minute)
         return calendar.date(from: c)!
     }
 
@@ -197,6 +280,12 @@ final class ScheduleKindTests: XCTestCase {
         XCTAssertEqual(TobusConfig.estimatedScheduleKind(on: date(8, 22)), "土曜")
         XCTAssertEqual(TobusConfig.estimatedScheduleKind(on: date(8, 23)), "休日", "日曜")
         XCTAssertEqual(TobusConfig.calendarDayString(from: date(8, 29)), "2026-08-29")
+    }
+
+    func testBeforeDawnIsScheduleBannerUntrusted() {
+        XCTAssertTrue(TobusConfig.isBeforeScheduleBannerTrustHour(date(9, 20, 1, 22)))
+        XCTAssertFalse(TobusConfig.isBeforeScheduleBannerTrustHour(date(9, 20, 5, 0)))
+        XCTAssertFalse(TobusConfig.isBeforeScheduleBannerTrustHour(date(9, 20, 10, 0)))
     }
 
     func testStartOfNextCalendarDayIsMidnightJST() {

@@ -92,6 +92,8 @@ final class ArrivalModel: ObservableObject {
     private var timer: Timer?
     /// 日付が変わったとき、保存済み時刻表から当日の区分を載せ直す（60秒タイマーが App Nap で遅れても拾う）。
     private var dayChangeTimer: Timer?
+    /// 「本日は」バナーが信用できる時刻になったら時刻表を取り直す。
+    private var bannerTrustTimer: Timer?
     private var selectionGeneration = 0
     private var searchGeneration = 0
     private var didRestoreSelection = false
@@ -101,6 +103,7 @@ final class ArrivalModel: ObservableObject {
         observePauseChangesFromWidget()
         observeManualRefreshRequestsFromWidget()
         scheduleDayChangeReload()
+        scheduleBannerTrustReload()
         Task { await restoreSelectionIfNeeded() }
         if !isPaused {
             startTimer()
@@ -133,6 +136,29 @@ final class ArrivalModel: ObservableObject {
             await refresh(force: true)
         }
         scheduleDayChangeReload()
+        scheduleBannerTrustReload()
+    }
+
+    /// 日付変更直後の「本日は土曜」名残が残っているあいだは、朝になってから取り直す。
+    private func scheduleBannerTrustReload() {
+        bannerTrustTimer?.invalidate()
+        let now = Date()
+        guard TobusConfig.isBeforeScheduleBannerTrustHour(now) else { return }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TobusConfig.timeZone
+        var parts = calendar.dateComponents([.year, .month, .day], from: now)
+        parts.hour = TobusConfig.scheduleBannerTrustHour
+        parts.minute = 0
+        parts.second = 0
+        guard let fireAt = calendar.date(from: parts), fireAt > now else { return }
+        let timer = Timer(fire: fireAt, interval: 0, repeats: false) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, !self.isPaused else { return }
+                await self.refresh(force: true)
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        bannerTrustTimer = timer
     }
 
     /// 通信せず、保存済み時刻表を「今」の日付で載せ直す。
