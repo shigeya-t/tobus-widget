@@ -83,7 +83,14 @@ struct ParsedTimetable: Equatable {
     /// **今日と同じ表を使い回してはいけない**（日曜→月曜のようにダイヤ区分が変わる）。
     /// 区分は (1) 取得当日なら `todayKind` (2) 「乗車予定日のダイヤ」 (3) 曜日推定、の順。
     /// (3) は祝日を外しうるので、見出しに区分名を出して判断できるようにする。
+    ///
+    /// 日付変更直後は、前日ダイヤの 24 時超の便が残っていればそれを先に出す。
+    /// 「本日は土曜」のバナーが日曜早朝まで残っていても、土曜の朝の便を今日へ投影しない。
     func upcoming(now: Date = Date()) -> UpcomingSchedule {
+        if let leftover = leftoverFromPreviousServiceDay(now: now) {
+            return leftover
+        }
+
         let todayK = scheduleKind(on: now)
         let remaining = BusTime.departures(from: times(kind: todayK), on: now, after: now)
         if !remaining.isEmpty {
@@ -104,9 +111,17 @@ struct ParsedTimetable: Equatable {
     }
 
     /// 指定日のダイヤ区分。取得当日の申告と乗車予定日の表を優先し、無ければ曜日から推定する。
+    ///
+    /// 日付変更直後に取ったページの「本日は〇曜」が前日の区分のままなら、その申告は使わない。
+    /// 日曜 1 時の「本日は土曜」を今日へ適用すると、土曜の始発が日曜朝の定刻になる。
     func scheduleKind(on date: Date) -> String? {
         let key = TobusConfig.calendarDayString(from: date)
-        if fetchedOnDay == key { return todayKind }
+        if fetchedOnDay == key {
+            if shouldIgnoreOvernightBanner(on: date) {
+                return TobusConfig.estimatedScheduleKind(on: date)
+            }
+            return todayKind
+        }
         if let kind = upcomingKinds[key], !kind.isEmpty { return kind }
         return TobusConfig.estimatedScheduleKind(on: date)
     }
@@ -116,9 +131,64 @@ struct ParsedTimetable: Equatable {
     /// 表の中身は日中変わらないが、`todayKind` は日付変更直後の古いページを掴むと
     /// 日曜の休日のまま月曜いっぱい残る。曜日推定と食い違うときは再取得する。
     /// 祝日は再取得後も食い違うので、呼び出し側は再取得済みなら再利用する。
+    /// 比較はページの生の申告で行う（早朝の読み替えを「一致」とみなして再取得を止めない）。
     func shouldReuseAsDailyCache(alreadyRevalidated: Bool, now: Date = Date()) -> Bool {
         if alreadyRevalidated { return true }
-        return scheduleKind(on: now) == TobusConfig.estimatedScheduleKind(on: now)
+        return declaredKind(on: now) == TobusConfig.estimatedScheduleKind(on: now)
+    }
+
+    /// 日付変更直後の取得が、前日に控えていた乗車予定日の申告と食い違うときは前回値を残す。
+    /// 日曜早朝の「本日は土曜」で、土曜取得時の「9/20 休日」を消さないため。
+    func replacingOvernightFetchIfNeeded(previous: ParsedTimetable?, now: Date = Date()) -> ParsedTimetable {
+        guard TobusConfig.isBeforeScheduleBannerTrustHour(now),
+              let previous, !previous.tables.isEmpty
+        else { return self }
+
+        let today = TobusConfig.calendarDayString(from: now)
+        let forecast: String?
+        if previous.fetchedOnDay == today {
+            forecast = previous.todayKind
+        } else {
+            forecast = previous.upcomingKinds[today]
+        }
+        guard let forecast, !forecast.isEmpty, let todayKind, todayKind != forecast else {
+            return self
+        }
+        return previous
+    }
+
+    /// ページがこの日付について申告した区分。早朝の読み替え前の値。
+    private func declaredKind(on date: Date) -> String? {
+        let key = TobusConfig.calendarDayString(from: date)
+        if fetchedOnDay == key { return todayKind }
+        if let kind = upcomingKinds[key], !kind.isEmpty { return kind }
+        return TobusConfig.estimatedScheduleKind(on: date)
+    }
+
+    /// 「本日は土曜」が日曜早朝まで残っている、のような日付変更直後の名残か。
+    /// お盆の土曜が休日ダイヤ、のような**今日の特別運行**は、前日推定と一致しないので残す。
+    private func shouldIgnoreOvernightBanner(on date: Date) -> Bool {
+        guard TobusConfig.isBeforeScheduleBannerTrustHour(date),
+              let todayKind, !todayKind.isEmpty
+        else { return false }
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TobusConfig.timeZone
+        guard let yesterday = calendar.date(byAdding: .day, value: -1, to: date) else { return false }
+        let estimatedToday = TobusConfig.estimatedScheduleKind(on: date)
+        let estimatedYesterday = TobusConfig.estimatedScheduleKind(on: yesterday)
+        return todayKind == estimatedYesterday && todayKind != estimatedToday
+    }
+
+    /// 前日ダイヤの 24 時超の便が、日付変更後もまだ来ていないとき。
+    private func leftoverFromPreviousServiceDay(now: Date) -> UpcomingSchedule? {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TobusConfig.timeZone
+        guard let yesterday = calendar.date(byAdding: .day, value: -1, to: now) else { return nil }
+        let kind = declaredKind(on: yesterday)
+        let remaining = BusTime.departures(from: times(kind: kind), on: yesterday, after: now)
+        guard !remaining.isEmpty else { return nil }
+        return UpcomingSchedule(departures: remaining, kind: kind, isNextDay: false)
     }
 
     /// 表示中の定刻に出てくる記号だけの凡例。ウィジェットなど幅が無い面向け。
