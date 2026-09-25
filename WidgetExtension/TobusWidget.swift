@@ -45,6 +45,11 @@ struct BusEntry: TimelineEntry {
         Self.firstNonEmpty(stopName, routeDisplayName) ?? "都バス"
     }
 
+    /// 中サイズのヘッダー。`??` だと空文字の系統名で止まり見出しが空になるため、空文字も飛ばす。
+    var longHeaderText: String {
+        Self.firstNonEmpty(routeDisplayName, stopName) ?? "都バス"
+    }
+
     /// 小サイズのヘッダーで、系統ラベルとは別の行に出す行き先。
     /// バス停名が無いときは `shortHeaderText` が系統の表示名（＝行き先を含む）に化けるため、
     /// 二重に出さないよう nil にする。
@@ -204,7 +209,7 @@ struct TobusWidgetEntryView: View {
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
                     }
-                    Text(entry.routeDisplayName ?? entry.stopName ?? "都バス")
+                    Text(entry.longHeaderText)
                         .font(.subheadline.bold())
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)

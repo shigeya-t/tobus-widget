@@ -368,7 +368,14 @@ enum TobusPageParser {
         components.hour = hour
         components.minute = minute
         components.second = 0
-        return calendar.date(from: components) ?? now
+        guard let observed = calendar.date(from: components) else { return now }
+        // ページには時刻しか無い。23:59 の情報を日付変更後に取ると、今日の 23:59＝約1日先になり、
+        // 「更新できていない可能性」の判定も効かなくなる。未来に大きくずれたら前日の時刻とみなす。
+        if observed.timeIntervalSince(now) > 60 * 60,
+           let previousDay = calendar.date(byAdding: .day, value: -1, to: observed) {
+            return previousDay
+        }
+        return observed
     }
 
     /// 系統ブロックの表の外にある注記を取る。

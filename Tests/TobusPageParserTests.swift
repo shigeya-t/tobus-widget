@@ -109,6 +109,41 @@ final class TobusPageParserTests: XCTestCase {
         XCTAssertNotNil(components.minute)
     }
 
+    /// 23:59 時点の情報を日付変更直後に取ったとき、今日の 23:59（約1日先）にしない。
+    func testObservedAtJustBeforeMidnightStaysOnPreviousDay() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TobusConfig.timeZone
+        let now = try XCTUnwrap(calendar.date(from: DateComponents(
+            year: 2026, month: 9, day: 26, hour: 0, minute: 0, second: 30
+        )))
+        let html = #"<html><body><span class="fc-ff0">23:59</span></body></html>"#
+        let page = try TobusPageParser.parseStopPage(html: html, slst: 325, now: now)
+        let expected = try XCTUnwrap(calendar.date(from: DateComponents(
+            year: 2026, month: 9, day: 25, hour: 23, minute: 59
+        )))
+        XCTAssertEqual(page.observedAt, expected)
+    }
+
+    /// 同じ日の時刻はそのまま今日の時刻になる。
+    func testObservedAtOnSameDay() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TobusConfig.timeZone
+        let now = try XCTUnwrap(calendar.date(from: DateComponents(
+            year: 2026, month: 9, day: 25, hour: 21, minute: 2
+        )))
+        let html = #"<html><body><span class="fc-ff0">21:01</span></body></html>"#
+        let page = try TobusPageParser.parseStopPage(html: html, slst: 325, now: now)
+        XCTAssertEqual(page.observedAt, now.addingTimeInterval(-60))
+    }
+
+    /// 停留所の検索語は行動範囲を推測できるため、API リクエストのログに値を残さない。
+    func testRequestLogRedactsSearchText() {
+        let logged = BusAPI.loggableDescription(of: ["VCD": "csrst", "srtxt": "勝どき"])
+        XCTAssertFalse(logged.contains("勝どき"))
+        XCTAssertTrue(logged.contains("srtxt=<private>"))
+        XCTAssertTrue(logged.contains("VCD=csrst"))
+    }
+
     /// 表の直後に「本日は運休日です。」とある系統は、接近なしではなく運休として出す。
     func testTreatsSiblingUnserviceTextAsSuspended() throws {
         let block = try XCTUnwrap(try parsedPage().blocks.first { $0.label == "都０５－１出入" })

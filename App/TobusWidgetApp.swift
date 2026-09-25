@@ -22,6 +22,10 @@ struct TobusWidgetApp: App {
 final class ArrivalModel: ObservableObject {
     /// 常駐中の取得間隔。サーバー側のエッジキャッシュ（60秒）より短くしても意味がない。
     private static let refreshInterval: TimeInterval = 60
+    /// ウィジェットからの「今すぐ更新」を受け付ける最短間隔。
+    /// 通知は `DistributedNotificationCenter` 経由で、同じマシン上のどのプロセスからも送れる。
+    /// 連打や他プロセスからの大量送信で、一時停止中でも tobus.jp を叩き続けないようにする。
+    private static let manualRefreshMinimumInterval: TimeInterval = 10
 
     @Published var stopSearchText: String = ""
     @Published var stopResults: [BusStopCluster] = []
@@ -97,6 +101,7 @@ final class ArrivalModel: ObservableObject {
     private var selectionGeneration = 0
     private var searchGeneration = 0
     private var didRestoreSelection = false
+    private var lastManualRefreshRequestAt: Date?
 
     init() {
         isPaused = AppSettings.isPaused
@@ -186,7 +191,7 @@ final class ArrivalModel: ObservableObject {
 
     func performSearch() async {
         let text = stopSearchText.trimmingCharacters(in: .whitespaces)
-        busLogger.debug("performSearch: text=\(text, privacy: .public)")
+        busLogger.debug("performSearch: text=\(text, privacy: .private)")
         guard !text.isEmpty else {
             stopResults = []
             searchHint = nil
@@ -216,7 +221,8 @@ final class ArrivalModel: ObservableObject {
             // 後続タスクはデバウンス中でまだ世代を進めていないため上の world チェックを素通りする。
             // ここで弾かないと、打鍵のたびに誤ったエラーが一瞬表示される。
             guard !Self.isCancellation(error) else { return }
-            busLogger.error("performSearch failed: \(String(describing: error), privacy: .public)")
+            // `String(describing:)` は URLError の userInfo（失敗したURL＝検索語入り）まで出すので使わない。
+            busLogger.error("performSearch failed: \(error.localizedDescription, privacy: .public)")
             stopResults = []
             // 黙って空にすると「ヒットなし」と区別がつかず、通信断に気づけない。
             searchHint = "検索できませんでした（\(error.localizedDescription)）"
@@ -244,8 +250,18 @@ final class ArrivalModel: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in await self?.refresh(force: true) }
+            Task { @MainActor in await self?.handleManualRefreshRequest() }
         }
+    }
+
+    private func handleManualRefreshRequest(now: Date = Date()) async {
+        if let last = lastManualRefreshRequestAt,
+           now.timeIntervalSince(last) < Self.manualRefreshMinimumInterval {
+            busLogger.debug("manual refresh request ignored (throttled)")
+            return
+        }
+        lastManualRefreshRequestAt = now
+        await refresh(force: true)
     }
 
     private func syncPauseState() {
@@ -505,7 +521,7 @@ struct MenuContent: View {
             }
         }
         .task(id: model.stopSearchText) {
-            busLogger.debug("search .task fired, id=\(model.stopSearchText, privacy: .public)")
+            busLogger.debug("search .task fired, id=\(model.stopSearchText, privacy: .private)")
             try? await Task.sleep(nanoseconds: 400_000_000)
             guard !Task.isCancelled else {
                 busLogger.debug("search .task cancelled")
