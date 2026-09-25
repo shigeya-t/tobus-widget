@@ -10,12 +10,14 @@ enum BusAPIError: LocalizedError {
     case invalidURL
     case httpStatus(Int)
     case emptyResponse
+    case undecodableResponse
 
     var errorDescription: String? {
         switch self {
         case .invalidURL: return "URLを組み立てられません"
         case .httpStatus(let code): return "サーバーがエラーを返しました（HTTP \(code)）"
         case .emptyResponse: return "サーバーの応答が空です"
+        case .undecodableResponse: return "サーバーの応答をUTF-8として読めません"
         }
     }
 }
@@ -45,6 +47,10 @@ enum BusAPI {
         configuration.httpShouldSetCookies = false
         configuration.httpCookieAcceptPolicy = .never
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        // 既定（リクエスト60秒・リソース7日）のままだと、応答の遅い回が次の60秒周期に重なり、
+        // single-flight で相乗りした待ち手ごと止まる。60秒周期の中で必ず決着させる。
+        configuration.timeoutIntervalForRequest = 15
+        configuration.timeoutIntervalForResource = 30
         return URLSession(configuration: configuration)
     }()
 
@@ -63,23 +69,32 @@ enum BusAPI {
         guard let url = url(query: query) else { throw BusAPIError.invalidURL }
         var request = URLRequest(url: url)
         request.cachePolicy = .reloadIgnoringLocalCacheData
-        busLogger.debug("API request: \(query.description, privacy: .public)")
+        busLogger.debug("API request: \(loggableDescription(of: query), privacy: .public)")
         do {
             let (data, response) = try await session.data(for: request)
             if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
                 throw BusAPIError.httpStatus(http.statusCode)
             }
-            guard !data.isEmpty, let html = String(data: data, encoding: .utf8) else {
-                throw BusAPIError.emptyResponse
+            guard !data.isEmpty else { throw BusAPIError.emptyResponse }
+            guard let html = String(data: data, encoding: .utf8) else {
+                throw BusAPIError.undecodableResponse
             }
             return html
-        } catch let error as BusAPIError {
-            busLogger.error("取得に失敗: \(error.localizedDescription, privacy: .public)")
-            throw error
         } catch {
             busLogger.error("取得に失敗: \(error.localizedDescription, privacy: .public)")
             throw error
         }
+    }
+
+    /// 利用者が入力した検索語（`srtxt`）は行動範囲を推測できる個人情報なので、
+    /// `.public` のログには値を残さず、キーだけを出す（検索語は `performSearch` 側で `.private` として記録する）。
+    private static let privateQueryKeys: Set<String> = ["srtxt"]
+
+    static func loggableDescription(of query: [String: String]) -> String {
+        query
+            .map { privateQueryKeys.contains($0.key) ? "\($0.key)=<private>" : "\($0.key)=\($0.value)" }
+            .sorted()
+            .joined(separator: "&")
     }
 
     /// 停留所名称検索（部分一致）。ひらがな・カタカナは2文字以上、漢字は1文字から検索できる。
