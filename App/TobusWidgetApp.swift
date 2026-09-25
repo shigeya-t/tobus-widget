@@ -221,7 +221,8 @@ final class ArrivalModel: ObservableObject {
             // 後続タスクはデバウンス中でまだ世代を進めていないため上の world チェックを素通りする。
             // ここで弾かないと、打鍵のたびに誤ったエラーが一瞬表示される。
             guard !Self.isCancellation(error) else { return }
-            busLogger.error("performSearch failed: \(String(describing: error), privacy: .public)")
+            // `String(describing:)` は URLError の userInfo（失敗したURL＝検索語入り）まで出すので使わない。
+            busLogger.error("performSearch failed: \(error.localizedDescription, privacy: .public)")
             stopResults = []
             // 黙って空にすると「ヒットなし」と区別がつかず、通信断に気づけない。
             searchHint = "検索できませんでした（\(error.localizedDescription)）"

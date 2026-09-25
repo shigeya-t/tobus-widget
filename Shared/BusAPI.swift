@@ -32,6 +32,10 @@ enum BusAPI {
     static let host = "tobus.jp"
     static let path = "/blsys/navi"
 
+    /// 追加データを待つ上限。`URLRequest(url:)` は既定で `timeoutInterval` = 60秒を持ち、
+    /// セッション設定の `timeoutIntervalForRequest` より優先されるため、リクエスト側にも同じ値を設定する。
+    private static let requestTimeout: TimeInterval = 15
+
     /// **Cookieを保持しない専用セッション。`URLSession.shared` を使ってはいけない。**
     ///
     /// tobus.jp は応答に `JSESSIONID` を付けてくる。`URLSession.shared` は Cookie を自動で
@@ -49,7 +53,7 @@ enum BusAPI {
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
         // 既定（リクエスト60秒・リソース7日）のままだと、応答の遅い回が次の60秒周期に重なり、
         // single-flight で相乗りした待ち手ごと止まる。60秒周期の中で必ず決着させる。
-        configuration.timeoutIntervalForRequest = 15
+        configuration.timeoutIntervalForRequest = requestTimeout
         configuration.timeoutIntervalForResource = 30
         return URLSession(configuration: configuration)
     }()
@@ -69,6 +73,7 @@ enum BusAPI {
         guard let url = url(query: query) else { throw BusAPIError.invalidURL }
         var request = URLRequest(url: url)
         request.cachePolicy = .reloadIgnoringLocalCacheData
+        request.timeoutInterval = requestTimeout
         busLogger.debug("API request: \(loggableDescription(of: query), privacy: .public)")
         do {
             let (data, response) = try await session.data(for: request)
