@@ -264,7 +264,7 @@ struct TobusWidgetEntryView: View {
         TimelineView(.everyMinute) { context in
             let live = resolvedSchedule(at: context.date)
             if !live.departures.isEmpty {
-                let shown = Array(live.departures.prefix(family == .systemSmall ? 2 : 3))
+                let shown = Array(live.departures.prefix(3))
                 let usedMarks = Set(shown.compactMap(\.mark).filter { !$0.isEmpty })
                 let captions = live.legend
                     .filter { usedMarks.contains($0.symbol) }
@@ -275,18 +275,12 @@ struct TobusWidgetEntryView: View {
                         .foregroundStyle(.tertiary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
-                    HStack(spacing: 6) {
-                        ForEach(Array(shown.enumerated()), id: \.offset) { _, dep in
-                            HStack(spacing: 1) {
-                                Text(dep.date, format: .dateTime.hour().minute())
-                                    .monospacedDigit()
-                                if let mark = dep.mark, !mark.isEmpty {
-                                    Text(mark)
-                                }
-                            }
-                            .font(Self.footnoteFont)
-                            .foregroundStyle(.secondary)
-                        }
+                    // 12時間表記の "PM" が付くと小サイズでは3件目が枠外に切れる。
+                    // 午前午後は出さず、それでも足りなければ文字を縮める。
+                    ViewThatFits(in: .horizontal) {
+                        scheduleTimes(shown, spacing: 6, size: 9)
+                        scheduleTimes(shown, spacing: 3, size: 8)
+                        scheduleTimes(shown, spacing: 2, size: 7)
                     }
                     if !captions.isEmpty {
                         Text(captions.joined(separator: " · "))
@@ -296,6 +290,24 @@ struct TobusWidgetEntryView: View {
                             .minimumScaleFactor(0.7)
                     }
                 }
+            }
+        }
+    }
+
+    private func scheduleTimes(_ shown: [ScheduledDeparture], spacing: CGFloat, size: CGFloat) -> some View {
+        HStack(spacing: spacing) {
+            ForEach(Array(shown.enumerated()), id: \.offset) { _, dep in
+                HStack(spacing: 1) {
+                    Text(dep.date, format: .dateTime.hour(.twoDigits(amPM: .omitted)).minute())
+                        .monospacedDigit()
+                    if let mark = dep.mark, !mark.isEmpty {
+                        Text(mark)
+                    }
+                }
+                .font(.system(size: size))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .fixedSize()
             }
         }
     }
