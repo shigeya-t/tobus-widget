@@ -177,61 +177,71 @@ struct TobusWidgetEntryView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
+    /// ボタンと横に並べるのは1行目だけにし、2行目以降は全幅を使う。
+    /// 全行をボタンの横に置くと「とうきょうスカイツリー駅前 行」（業１０）のような
+    /// 長い行き先が、縮小しても小サイズの幅に収まらず切れる。
     private var header: some View {
-        HStack(alignment: .top, spacing: 6) {
-            VStack(alignment: .leading, spacing: 1) {
-                if family == .systemSmall {
-                    // 小サイズは横幅が狭く「系統＋行き先」を1行で入れると収まらないため、
-                    // 系統ラベル・行き先・バス停名を行に分けて出す。
-                    if let routeLabel = entry.shortRouteLabel {
-                        Text(routeLabel)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                    }
-                    if let destination = entry.shortDestination {
-                        Text(destination)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
-                    }
-                    Text(entry.shortHeaderText)
-                        .font(.caption.bold())
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.8)
-                } else {
-                    if let stopName = entry.stopName, !stopName.isEmpty {
-                        Text(stopName)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                    }
-                    Text(entry.longHeaderText)
-                        .font(.subheadline.bold())
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                }
+        VStack(alignment: .leading, spacing: 1) {
+            HStack(alignment: .top, spacing: 6) {
+                headerFirstLine
+                Spacer(minLength: 0)
+                headerButtons
             }
-            Spacer(minLength: 0)
-            if entry.routeID != nil {
-                HStack(spacing: 8) {
-                    Button(intent: TogglePauseIntent()) {
-                        Image(systemName: entry.isPaused ? "play.fill" : "pause.fill")
-                            .font(.caption)
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(entry.isPaused ? .orange : .secondary)
-
-                    Button(intent: RefreshBusIntent(routeID: entry.routeID)) {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.caption)
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
+            if family == .systemSmall {
+                // 小サイズは横幅が狭く「系統＋行き先」を1行で入れると収まらないため、
+                // 系統ラベル・行き先・バス停名を行に分けて出す。
+                if let destination = entry.shortDestination {
+                    Text(destination)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
                 }
+                Text(entry.shortHeaderText)
+                    .font(.caption.bold())
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+            } else {
+                Text(entry.longHeaderText)
+                    .font(.subheadline.bold())
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+            }
+        }
+    }
+
+    /// 小サイズは系統ラベル、それ以外はバス停名。
+    @ViewBuilder
+    private var headerFirstLine: some View {
+        let text = family == .systemSmall
+            ? entry.shortRouteLabel
+            : entry.stopName.flatMap { $0.isEmpty ? nil : $0 }
+        if let text {
+            Text(text)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+    }
+
+    @ViewBuilder
+    private var headerButtons: some View {
+        if entry.routeID != nil {
+            HStack(spacing: 8) {
+                Button(intent: TogglePauseIntent()) {
+                    Image(systemName: entry.isPaused ? "play.fill" : "pause.fill")
+                        .font(.caption)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(entry.isPaused ? .orange : .secondary)
+
+                Button(intent: RefreshBusIntent(routeID: entry.routeID)) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.caption)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
             }
         }
     }
