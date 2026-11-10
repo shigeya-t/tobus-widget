@@ -61,7 +61,10 @@ struct RouteBlockEntity: AppEntity {
     }
 }
 
-struct RouteBlockQuery: EntityQuery {
+/// 素の `EntityQuery`（`suggestedEntities()` だけ）だと編集画面が選択肢をポップアップメニューで出し、
+/// macOS 27.2.1 ではその経路で「選んだ値が編集画面に反映されない」「閉じたあとウィジェットの
+/// 右クリックメニューが出なくなる」が起きる。`EntityStringQuery` にすると検索つきリストになり起きない。
+struct RouteBlockQuery: EntityStringQuery {
     /// 選択中の停留所に属する系統だけを候補に出すため、同じIntentの stop パラメータを参照する
     @IntentParameterDependency<SelectBusStopIntent>(\.$stop)
     var selection
@@ -80,6 +83,14 @@ struct RouteBlockQuery: EntityQuery {
         guard let slstString = selection?.stop.id, let slst = Int(slstString) else { return [] }
         let blocks = (try? await BusDirectoryService.fetchRouteBlocks(slst: slst)) ?? []
         return blocks.map(RouteBlockEntity.init)
+    }
+
+    /// `suggestedEntities()` と同じ集合（選択中の停留所の系統）を表示名で絞り込む。
+    func entities(matching string: String) async throws -> [RouteBlockEntity] {
+        let all = try await suggestedEntities()
+        let query = string.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return all }
+        return all.filter { $0.name.localizedCaseInsensitiveContains(query) }
     }
 }
 

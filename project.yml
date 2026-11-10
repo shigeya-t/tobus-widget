@@ -33,6 +33,8 @@ targets:
         # 一覧には ASCII の「TobusWidget」が出る。上の WRAPPER_NAME のコメント参照。
         CFBundleName: 都バス接近情報
         CFBundleDisplayName: 都バス接近情報
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         # メニューバー常駐アプリ。Dock とアプリスイッチャーには出さない
         LSUIElement: true
         AppGroupID: $(APP_GROUP_ID)
@@ -53,7 +55,7 @@ targets:
         # 「バ」が分解可能な文字で、LaunchServices は NFC・PluginKit は NFD でパスを持つため、
         # ExtensionKit のパス照合が一致しない（CLAUDE.md「開発中に踏んだ既知の落とし穴」参照）。
         MARKETING_VERSION: "1.0"
-        CURRENT_PROJECT_VERSION: "1"
+        CURRENT_PROJECT_VERSION: "2"
         CODE_SIGN_STYLE: Automatic
         SWIFT_VERSION: "5.0"
         # App Group は macOS では Team ID プレフィックスが必須。
@@ -75,6 +77,8 @@ targets:
       properties:
         CFBundleName: 都バス接近情報
         CFBundleDisplayName: 都バス接近情報
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
         AppGroupID: $(APP_GROUP_ID)
@@ -89,7 +93,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.example.TobusWidget.Widget
         MARKETING_VERSION: "1.0"
-        CURRENT_PROJECT_VERSION: "1"
+        CURRENT_PROJECT_VERSION: "2"
         CODE_SIGN_STYLE: Automatic
         SWIFT_VERSION: "5.0"
         APP_GROUP_ID: $(DEVELOPMENT_TEAM).com.example.TobusWidget
