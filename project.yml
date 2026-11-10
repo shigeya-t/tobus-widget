@@ -54,9 +54,10 @@ targets:
         # 「都バス接近情報.app」を指定したことがあるが、ウィジェット拡張が起動できなくなる。
         # 「バ」が分解可能な文字で、LaunchServices は NFC・PluginKit は NFD でパスを持つため、
         # ExtensionKit のパス照合が一致しない（CLAUDE.md「開発中に踏んだ既知の落とし穴」参照）。
-        MARKETING_VERSION: "1.0"
-        CURRENT_PROJECT_VERSION: "2"
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "3"
         CODE_SIGN_STYLE: Automatic
+        ENABLE_HARDENED_RUNTIME: YES
         SWIFT_VERSION: "5.0"
         # App Group は macOS では Team ID プレフィックスが必須。
         # フォーク時は DEVELOPMENT_TEAM を指定すれば全体に反映される。
@@ -92,9 +93,10 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.example.TobusWidget.Widget
-        MARKETING_VERSION: "1.0"
-        CURRENT_PROJECT_VERSION: "2"
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "3"
         CODE_SIGN_STYLE: Automatic
+        ENABLE_HARDENED_RUNTIME: YES
         SWIFT_VERSION: "5.0"
         APP_GROUP_ID: $(DEVELOPMENT_TEAM).com.example.TobusWidget
         SKIP_INSTALL: false
