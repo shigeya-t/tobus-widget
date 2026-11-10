@@ -91,6 +91,10 @@ IDを教えてくれるため、こちらで祝日判定などを行う必要は
 
 ## 必要なもの
 
+[Releases](https://github.com/shigeya-t/tobus-widget/releases) の DMG（Developer ID 署名・公証済み）を使う場合は
+macOS 14 以降だけで足ります。DMG を開いて `TobusWidget.app` を「アプリケーション」へドラッグし、
+起動したら下の「ビルドと導入」の手順 3 以降に進んでください。以下は自分でビルドする場合に必要なものです。
+
 - macOS 14 以降
 - Xcode 15 以降
 - [XcodeGen](https://github.com/yonaskolb/XcodeGen)（`brew install xcodegen`）

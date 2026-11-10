@@ -68,6 +68,21 @@ xcodebuild -project TobusWidget.xcodeproj -scheme TobusWidget \
 起動しただけではウィジェットは画面に出ない。通知センターまたはデスクトップの
 「ウィジェットを編集」から追加する（README の「ビルドと導入」参照）。
 
+## 配布用 DMG（`scripts/make-dmg.sh`）
+
+```sh
+NOTARY_PROFILE=notary DEVELOPMENT_TEAM=<Developer ID を使える Team ID> ./scripts/make-dmg.sh
+```
+
+アーカイブ → Developer ID で書き出し（クラウド署名）→ `Applications` リンク付き DMG → 公証 → staple まで行い、
+`build/dist/` に出す。公証には hardened runtime が必須（`project.yml` の `ENABLE_HARDENED_RUNTIME`）。
+`notarytool submit --wait` は Invalid でも 0 で終わるので、スクリプトは status を見て止める。
+リリースノートは `docs/releases/v<version>.md`、バージョンは `project.yml` の `MARKETING_VERSION`。
+
+App Group は `$(DEVELOPMENT_TEAM).com.example.TobusWidget` なので、**配布用チームで作った DMG のアプリと、
+開発用チームで `deploy-local.sh` したアプリは設定・スナップショットを共有しない**。同じ bundle ID の
+アプリが2か所にあるとウィジェットが空になりうるため、配布版を試すときは開発版を消してから入れること。
+
 ## テストの構成
 
 `TobusWidgetTests` は**ホストアプリを立てない**単体テスト（`Shared` のソースを直接取り込む構成）。
